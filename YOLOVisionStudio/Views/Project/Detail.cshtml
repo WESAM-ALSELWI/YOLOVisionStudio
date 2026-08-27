@@ -1,0 +1,303 @@
+@{
+    ViewData["Title"] = "Project Detail";
+}
+
+<style>
+    .metric-card { background: var(--color-card); border-radius: var(--radius-lg); padding: 20px; border: 1px solid var(--color-border); }
+    .metric-value { font-size: 2rem; font-weight: bold; color: var(--text-primary); }
+    .metric-label { color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
+    
+    .tab-nav { display: flex; border-bottom: 1px solid var(--color-border); margin-bottom: 20px; }
+    .tab-btn { background: none; border: none; padding: 10px 20px; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; font-weight: 500; transition: all 0.2s; }
+    .tab-btn:hover { color: var(--text-primary); }
+    .tab-btn.active { color: var(--color-primary-start); border-bottom-color: var(--color-primary-start); }
+    
+    .tab-panel { display: none; animation: fadeIn 0.3s; }
+    .tab-panel.active { display: block; }
+    
+    .timeline { border-left: 2px solid var(--color-border); padding-left: 20px; margin-left: 10px; }
+    .timeline-item { position: relative; margin-bottom: 20px; }
+    .timeline-item::before { content: ''; position: absolute; left: -26px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--color-primary-start); }
+    
+    table.custom-table { width: 100%; border-collapse: collapse; }
+    table.custom-table th, table.custom-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--color-border); }
+    table.custom-table th { color: var(--text-muted); font-weight: 500; text-transform: uppercase; font-size: 0.85rem; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb" style="background: transparent; padding: 0; margin-bottom: 5px;">
+                <li class="breadcrumb-item"><a href="#">Projects</a></li>
+                <li class="breadcrumb-item active">Helmet Detection</li>
+            </ol>
+        </nav>
+        <h1 class="page-title m-0 d-flex align-items-center">
+            🚀 Helmet Detection v2
+            <span class="badge badge-info ml-3" style="font-size: 0.9rem;">Detection</span>
+            <span class="badge badge-success ml-2" style="font-size: 0.9rem;">Active</span>
+        </h1>
+    </div>
+    <button class="btn btn-outline">Back to List</button>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="metric-card">
+            <div class="metric-label">Datasets</div>
+            <div class="metric-value text-info">2</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card">
+            <div class="metric-label">Models</div>
+            <div class="metric-value text-primary">3</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card">
+            <div class="metric-label">Experiments</div>
+            <div class="metric-value text-warning">7</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card">
+            <div class="metric-label">Best mAP50</div>
+            <div class="metric-value text-success">89.4%</div>
+        </div>
+    </div>
+</div>
+
+<div class="card p-4">
+    <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab('overview', this)">Overview</button>
+        <button class="tab-btn" onclick="switchTab('datasets', this)">Datasets</button>
+        <button class="tab-btn" onclick="switchTab('models', this)">Models</button>
+        <button class="tab-btn" onclick="switchTab('experiments', this)">Experiments</button>
+        <button class="tab-btn" onclick="switchTab('settings', this)">Settings</button>
+    </div>
+
+    <!-- Overview Tab -->
+    <div class="tab-panel active" id="tab-overview">
+        <div class="row">
+            <div class="col-md-8">
+                <h4 class="mb-3">Project Description</h4>
+                <p class="text-secondary">Detecting safety helmets in construction site camera feeds. This project aims to track compliance with safety regulations by identifying workers who are not wearing helmets in hazardous zones.</p>
+                <div class="mt-4">
+                    <h4 class="mb-3">Recent Activity</h4>
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="text-muted small">2 hours ago</div>
+                            <div>Model <strong>YOLOv8m-Helmet</strong> finished training. mAP50: 89.4%</div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="text-muted small">Yesterday</div>
+                            <div>Started training experiment <strong>Run-7-Augmented</strong>.</div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="text-muted small">Yesterday</div>
+                            <div>Dataset <strong>Site-Images-v2</strong> split into Train/Val (80/20).</div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="text-muted small">2 days ago</div>
+                            <div>Uploaded dataset <strong>Site-Images-v2</strong> (1,500 images).</div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="text-muted small">1 week ago</div>
+                            <div>Project created by AMB.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="bg-dark p-3 rounded border" style="border-color: var(--color-border) !important;">
+                    <h5 class="mb-3">Info</h5>
+                    <p class="mb-1 text-muted">Created:</p>
+                    <p>Aug 1, 2026</p>
+                    <p class="mb-1 text-muted">Storage Used:</p>
+                    <p>4.2 GB</p>
+                    <p class="mb-1 text-muted">API Endpoint:</p>
+                    <p><code class="bg-black p-1 rounded text-info">/api/v1/predict/helmet</code></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Datasets Tab -->
+    <div class="tab-panel" id="tab-datasets">
+        <div class="d-flex justify-content-between mb-3">
+            <h4>Datasets</h4>
+            <button class="btn btn-sm btn-primary">+ Upload New</button>
+        </div>
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Images</th>
+                    <th>Classes</th>
+                    <th>Format</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Site-Images-v2</td>
+                    <td>1,500</td>
+                    <td>2 (Helmet, No-Helmet)</td>
+                    <td><span class="badge badge-info">YOLO</span></td>
+                    <td><span class="badge badge-success">Ready</span></td>
+                    <td><button class="btn btn-sm btn-outline">View</button></td>
+                </tr>
+                <tr>
+                    <td>Initial-Batch</td>
+                    <td>500</td>
+                    <td>2 (Helmet, No-Helmet)</td>
+                    <td><span class="badge badge-info">YOLO</span></td>
+                    <td><span class="badge badge-success">Ready</span></td>
+                    <td><button class="btn btn-sm btn-outline">View</button></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Models Tab -->
+    <div class="tab-panel" id="tab-models">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>Version</th>
+                    <th>Task</th>
+                    <th>mAP50</th>
+                    <th>FPS</th>
+                    <th>Size</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>YOLOv8m-Helmet-v2</td>
+                    <td>Detection</td>
+                    <td class="text-success">89.4%</td>
+                    <td>45</td>
+                    <td>42 MB</td>
+                    <td><span class="badge badge-success">Deployed</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-primary">Test</button>
+                        <button class="btn btn-sm btn-outline">Export</button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>YOLOv8s-Helmet-Fast</td>
+                    <td>Detection</td>
+                    <td>82.1%</td>
+                    <td class="text-success">120</td>
+                    <td>21 MB</td>
+                    <td><span class="badge badge-info">Ready</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-primary">Test</button>
+                        <button class="btn btn-sm btn-outline">Export</button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>YOLOv8n-Baseline</td>
+                    <td>Detection</td>
+                    <td>74.5%</td>
+                    <td>180</td>
+                    <td>6 MB</td>
+                    <td><span class="badge badge-info">Ready</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-primary">Test</button>
+                        <button class="btn btn-sm btn-outline">Export</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Experiments Tab -->
+    <div class="tab-panel" id="tab-experiments">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>Run Name</th>
+                    <th>Status</th>
+                    <th>Best mAP50</th>
+                    <th>Duration</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Run-7-Augmented</td>
+                    <td><span class="badge badge-success">Completed</span></td>
+                    <td>89.4%</td>
+                    <td>4h 12m</td>
+                    <td><button class="btn btn-sm btn-outline">Details</button></td>
+                </tr>
+                <tr>
+                    <td>Run-6-MoreEpochs</td>
+                    <td><span class="badge badge-success">Completed</span></td>
+                    <td>88.1%</td>
+                    <td>6h 05m</td>
+                    <td><button class="btn btn-sm btn-outline">Details</button></td>
+                </tr>
+                <tr>
+                    <td>Run-5-Failed</td>
+                    <td><span class="badge badge-danger">Failed</span></td>
+                    <td>--</td>
+                    <td>0h 15m</td>
+                    <td><button class="btn btn-sm btn-outline">Details</button></td>
+                </tr>
+                <tr>
+                    <td>Run-4-Nano</td>
+                    <td><span class="badge badge-success">Completed</span></td>
+                    <td>74.5%</td>
+                    <td>1h 30m</td>
+                    <td><button class="btn btn-sm btn-outline">Details</button></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Settings Tab -->
+    <div class="tab-panel" id="tab-settings">
+        <h4 class="mb-3">Project Settings</h4>
+        <form style="max-width: 500px;">
+            <div class="form-group mb-3">
+                <label>Project Name</label>
+                <input type="text" class="form-control" value="Helmet Detection v2">
+            </div>
+            <div class="form-group mb-3">
+                <label>Description</label>
+                <textarea class="form-control" rows="3">Detecting safety helmets in construction site camera feeds.</textarea>
+            </div>
+            <div class="form-group mb-3">
+                <label>Default Task</label>
+                <select class="form-control bg-dark text-white border-secondary">
+                    <option selected>Object Detection</option>
+                    <option>Instance Segmentation</option>
+                </select>
+            </div>
+            <button type="button" class="btn btn-primary mt-2">Save Changes</button>
+            
+            <hr class="my-4 border-secondary">
+            <h5 class="text-danger">Danger Zone</h5>
+            <p class="text-muted small">Once you delete a project, there is no going back. Please be certain.</p>
+            <button type="button" class="btn btn-outline border-danger text-danger">Delete Project</button>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function switchTab(tabId, btn) {
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            
+            document.getElementById('tab-' + tabId).classList.add('active');
+            btn.classList.add('active');
+        }
+    </script>
+}

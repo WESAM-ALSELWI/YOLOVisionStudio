@@ -1,0 +1,289 @@
+﻿@{
+    ViewData["Title"] = "Live Inference";
+}
+
+<style>
+    .camera-container { display: flex; gap: 20px; height: calc(100vh - 120px); }
+    .main-view { flex-grow: 1; background: var(--color-card); border-radius: var(--radius-lg); border: 1px solid var(--color-border); display: flex; flex-direction: column; overflow: hidden; }
+    .sidebar { width: 350px; background: var(--color-card); border-left: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 20px; flex-shrink: 0; display: flex; flex-direction: column; }
+    
+    .view-header { padding: 15px 20px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); }
+    
+    .video-area { flex-grow: 1; background: #000; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    #videoElement { max-width: 100%; max-height: 100%; object-fit: contain; display: none; }
+    #overlayCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: none; }
+    
+    .placeholder-view { text-align: center; color: var(--text-muted); }
+    .placeholder-view i { font-size: 4rem; margin-bottom: 15px; opacity: 0.5; }
+    
+    .source-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+    .source-btn { flex: 1; background: #1f2937; border: 1px solid var(--color-border); color: var(--text-muted); padding: 8px; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center; }
+    .source-btn:hover { background: #374151; color: white; }
+    .source-btn.active { background: rgba(124, 58, 237, 0.2); border-color: var(--color-primary-start); color: white; box-shadow: inset 0 0 10px rgba(124, 58, 237, 0.1); }
+    
+    .stats-row { display: flex; justify-content: space-between; padding: 15px; background: rgba(0,0,0,0.3); border-top: 1px solid var(--color-border); }
+    .stat-item { text-align: center; }
+    .stat-val { font-size: 1.2rem; font-weight: bold; font-family: monospace; }
+    .stat-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; }
+    
+    .log-list { flex-grow: 1; overflow-y: auto; background: #0d1117; border-radius: 6px; border: 1px solid var(--color-border); padding: 10px; font-family: monospace; font-size: 0.85rem; }
+    .log-item { padding: 4px 0; border-bottom: 1px solid #1f2937; display: flex; justify-content: space-between; }
+    .log-item:last-child { border-bottom: none; }
+    
+    .range-group { margin-bottom: 15px; }
+    .val-display { float: right; font-family: monospace; color: var(--color-info); }
+</style>
+
+<div class="camera-container">
+    <!-- Main Video Area -->
+    <div class="main-view">
+        <div class="view-header">
+            <h5 class="m-0"><i class="fas fa-video text-danger mr-2 blink" id="recIcon" style="display:none;"></i> Live Feed</h5>
+            <div>
+                <span class="badge badge-dark border border-secondary" id="resolutionBadge">1920x1080</span>
+                <span class="badge badge-success ml-2">Connected</span>
+            </div>
+        </div>
+        
+        <div class="video-area" id="videoContainer">
+            <div class="placeholder-view" id="placeholderView">
+                <i class="fas fa-camera-retro"></i>
+                <h5>Camera Offline</h5>
+                <p>Select a source and click Start</p>
+            </div>
+            <video id="videoElement" autoplay playsinline muted></video>
+            <canvas id="overlayCanvas"></canvas>
+        </div>
+        
+        <div class="stats-row">
+            <div class="stat-item">
+                <div class="stat-val text-success" id="fpsCounter">0.0</div>
+                <div class="stat-label">Inference FPS</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-val text-info" id="objCounter">0</div>
+                <div class="stat-label">Objects Detected</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-val text-warning">8.4ms</div>
+                <div class="stat-label">Latency</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-val" id="timeCounter">00:00:00</div>
+                <div class="stat-label">Runtime</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sidebar Controls -->
+    <div class="sidebar">
+        <h5 class="mb-3">Source</h5>
+        <div class="source-tabs">
+            <div class="source-btn active" onclick="setSource('webcam', this)"><i class="fas fa-webcam mr-1"></i> Webcam</div>
+            <div class="source-btn" onclick="setSource('rtsp', this)"><i class="fas fa-network-wired mr-1"></i> RTSP</div>
+            <div class="source-btn" onclick="setSource('ip', this)"><i class="fas fa-ip mr-1"></i> IP Cam</div>
+        </div>
+        
+        <div id="srcWebcam" class="form-group mb-4">
+            <select class="form-control bg-dark text-white border-secondary">
+                <option>Integrated Camera</option>
+                <option>USB Video Device</option>
+            </select>
+        </div>
+        
+        <div id="srcRtsp" class="form-group mb-4" style="display: none;">
+            <input type="text" class="form-control bg-dark text-white border-secondary" placeholder="rtsp://admin:pass@192.168.1.10:554/stream1">
+        </div>
+        
+        <hr class="border-secondary mb-4">
+        
+        <h5 class="mb-3">Model Configuration</h5>
+        <div class="form-group mb-3">
+            <select class="form-control bg-dark text-white border-secondary">
+                <option>YOLOv8m-Helmet-v2 (FP16)</option>
+                <option>YOLOv8n-Baseline (INT8)</option>
+            </select>
+        </div>
+        
+        <div class="range-group">
+            <label>Confidence Threshold <span class="val-display" id="confVal">0.45</span></label>
+            <input type="range" class="w-100 accent-primary" min="1" max="100" value="45" oninput="document.getElementById('confVal').innerText=(this.value/100).toFixed(2)">
+        </div>
+        
+        <div class="range-group">
+            <label>IoU Threshold <span class="val-display" id="iouVal">0.45</span></label>
+            <input type="range" class="w-100 accent-primary" min="1" max="100" value="45" oninput="document.getElementById('iouVal').innerText=(this.value/100).toFixed(2)">
+        </div>
+        
+        <div class="form-group mb-4">
+            <label>Compute Device</label>
+            <div class="btn-group w-100">
+                <button class="btn btn-primary active w-50">GPU</button>
+                <button class="btn btn-outline w-50">CPU</button>
+            </div>
+        </div>
+        
+        <button class="btn btn-success btn-lg w-100 mb-4" id="startBtn" onclick="toggleCamera()">
+            <i class="fas fa-play mr-2"></i> Start Inference
+        </button>
+        
+        <h6 class="mb-2 text-muted">Detection Log</h6>
+        <div class="log-list" id="logList">
+            <div class="text-center text-muted mt-3" id="emptyLog">Waiting for detections...</div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .blink { animation: blinker 1s linear infinite; }
+    @@keyframes blinker { 50% { opacity: 0; } }
+</style>
+
+@section Scripts {
+    <script>
+        let isRunning = false;
+        let video = document.getElementById('videoElement');
+        let canvas = document.getElementById('overlayCanvas');
+        let ctx = canvas.getContext('2d');
+        let stream = null;
+        let inferenceInterval;
+        let timeInterval;
+        let secondsRun = 0;
+        
+        function setSource(src, btn) {
+            document.querySelectorAll('.source-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            document.getElementById('srcWebcam').style.display = src === 'webcam' ? 'block' : 'none';
+            document.getElementById('srcRtsp').style.display = src === 'rtsp' || src === 'ip' ? 'block' : 'none';
+        }
+        
+        async function toggleCamera() {
+            let btn = document.getElementById('startBtn');
+            let ph = document.getElementById('placeholderView');
+            let rec = document.getElementById('recIcon');
+            
+            if (!isRunning) {
+                try {
+                    // Try to get webcam
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    video.srcObject = stream;
+                    video.style.display = 'block';
+                    canvas.style.display = 'block';
+                    ph.style.display = 'none';
+                    rec.style.display = 'inline';
+                    
+                    // Setup canvas size
+                    video.onloadedmetadata = () => {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        document.getElementById('resolutionBadge').innerText = `${video.videoWidth}x${video.videoHeight}`;
+                    };
+                    
+                    btn.innerHTML = '<i class="fas fa-stop mr-2"></i> Stop Inference';
+                    btn.classList.replace('btn-success', 'btn-danger');
+                    isRunning = true;
+                    
+                    startSimulatedInference();
+                    startTime();
+                } catch (err) {
+                    alert("Error accessing camera: " + err.message);
+                }
+            } else {
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                video.style.display = 'none';
+                canvas.style.display = 'none';
+                ph.style.display = 'block';
+                rec.style.display = 'none';
+                
+                btn.innerHTML = '<i class="fas fa-play mr-2"></i> Start Inference';
+                btn.classList.replace('btn-danger', 'btn-success');
+                isRunning = false;
+                
+                clearInterval(inferenceInterval);
+                clearInterval(timeInterval);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                document.getElementById('fpsCounter').innerText = '0.0';
+                document.getElementById('objCounter').innerText = '0';
+            }
+        }
+        
+        function startSimulatedInference() {
+            let fps = 0;
+            document.getElementById('emptyLog').style.display = 'none';
+            let logList = document.getElementById('logList');
+            
+            inferenceInterval = setInterval(() => {
+                // Adjust canvas size in case window resized
+                if(video.offsetWidth > 0) {
+                    canvas.style.width = video.offsetWidth + 'px';
+                    canvas.style.height = video.offsetHeight + 'px';
+                    canvas.width = video.offsetWidth;
+                    canvas.height = video.offsetHeight;
+                }
+                
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                let numObjects = Math.floor(Math.random() * 4); // 0 to 3 objects
+                document.getElementById('objCounter').innerText = numObjects;
+                
+                // Simulate FPS fluctuation around 30
+                fps = 28 + Math.random() * 5;
+                document.getElementById('fpsCounter').innerText = fps.toFixed(1);
+                
+                for(let i=0; i<numObjects; i++) {
+                    let w = 100 + Math.random() * 150;
+                    let h = 100 + Math.random() * 150;
+                    let x = Math.random() * (canvas.width - w);
+                    let y = Math.random() * (canvas.height - h);
+                    let isHelmet = Math.random() > 0.3;
+                    let conf = (0.6 + Math.random() * 0.35).toFixed(2);
+                    
+                    let color = isHelmet ? '#10b981' : '#ef4444';
+                    let label = isHelmet ? 'Helmet' : 'No-Helmet';
+                    
+                    // Draw box
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(x, y, w, h);
+                    
+                    // Draw label bg
+                    ctx.fillStyle = color;
+                    ctx.fillRect(x, y - 25, 120, 25);
+                    
+                    // Draw text
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '16px Arial bold';
+                    ctx.fillText(`${label} ${conf}`, x + 5, y - 7);
+                    
+                    // Add to log occasionally
+                    if(Math.random() > 0.8) {
+                        let now = new Date();
+                        let timeStr = now.toLocaleTimeString() + '.' + now.getMilliseconds();
+                        let logHtml = `<div class="log-item"><span style="color:${color}">${label} [${conf}]</span><span class="text-muted">${timeStr}</span></div>`;
+                        logList.insertAdjacentHTML('afterbegin', logHtml);
+                        
+                        // Keep log small
+                        if(logList.children.length > 10) {
+                            logList.removeChild(logList.lastChild);
+                        }
+                    }
+                }
+            }, 33); // ~30fps loop
+        }
+        
+        function startTime() {
+            secondsRun = 0;
+            timeInterval = setInterval(() => {
+                secondsRun++;
+                let h = Math.floor(secondsRun / 3600).toString().padStart(2, '0');
+                let m = Math.floor((secondsRun % 3600) / 60).toString().padStart(2, '0');
+                let s = (secondsRun % 60).toString().padStart(2, '0');
+                document.getElementById('timeCounter').innerText = `${h}:${m}:${s}`;
+            }, 1000);
+        }
+    </script>
+}
+

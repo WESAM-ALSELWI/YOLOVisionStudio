@@ -1,0 +1,260 @@
+@model YOLOVisionStudio.Models.ViewModels.DatasetIndexViewModel
+@{
+    ViewData["Title"] = "Dataset Preparation System";
+}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title gradient-text">Dataset Manager</h1>
+        <p class="page-subtitle">Prepare, inspect, clean, and augment YOLO datasets</p>
+    </div>
+    <div style="display:flex; gap:10px;">
+        <a asp-action="Upload" asp-controller="Dataset" class="btn btn-outline">
+            📤 Upload Custom Dataset
+        </a>
+        <a asp-action="Augment" asp-controller="Dataset" class="btn btn-secondary">
+            🪄 Augmentation Studio
+        </a>
+        <a asp-action="Split" asp-controller="Dataset" class="btn btn-secondary">
+            📊 Splitter & YAML
+        </a>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="card mb-4" style="background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.3); color: var(--color-success); padding: 1rem 1.25rem;">
+        ⚡ @TempData["SuccessMessage"]
+    </div>
+}
+
+<!-- 3 Built-In Sample Datasets Section -->
+<div class="card mb-6" style="border-color: rgba(124,58,237,0.3); background: radial-gradient(ellipse at top left, rgba(124,58,237,0.08), transparent 70%), var(--color-card);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <div>
+            <h3 style="margin:0 0 4px; font-size:1.25rem; color:var(--text-primary);">🚀 Built-In Sample Datasets</h3>
+            <p style="margin:0; font-size:0.875rem; color:var(--text-muted);">Real, ready-to-train YOLO datasets. Downloaded once into <code>wwwroot/datasets</code> and reused afterwards.</p>
+        </div>
+        <span class="badge badge-info badge-lg">Beginner Friendly</span>
+    </div>
+
+    <div class="grid grid-cols-3 gap-3">
+        <!-- COCO8 -->
+        <div class="card p-3" style="background:rgba(255,255,255,0.02); border-color:var(--color-border); display:flex; flex-direction:column; justify-content:space-between;">
+            <div>
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div style="font-size:2.5rem; margin-bottom:8px;">🧪</div>
+                    <span class="badge badge-success">Beginner</span>
+                </div>
+                <h4 style="margin:0 0 6px; font-size:1rem;">COCO8 Sandbox</h4>
+                <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">Official Ultralytics mini-dataset: 8 real COCO images to verify the whole pipeline in seconds.</p>
+                <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:0.7rem;">
+                    <span class="badge badge-info">80 classes (COCO)</span>
+                    <span class="badge badge-warning">~1 MB · 8 images</span>
+                </div>
+                <div style="margin-top:10px; font-size:0.7rem; display:flex; gap:12px;">
+                    <a href="/Dataset/DownloadSample/coco8" download title="Download the raw dataset ZIP">⬇ ZIP</a>
+                    <a href="https://github.com/ultralytics/assets/releases/download/v0.0.0/coco8.zip" target="_blank" rel="noopener" title="Official source on GitHub">GitHub ↗</a>
+                </div>
+            </div>
+            <form asp-action="InstallSample" asp-controller="Dataset" method="post" class="sample-install-form" style="margin-top:12px;">
+                <input type="hidden" name="key" value="coco8" />
+                <button type="submit" class="btn btn-primary btn-sm w-100">Use Dataset →</button>
+            </form>
+        </div>
+
+        <!-- COCO128 -->
+        <div class="card p-3" style="background:rgba(255,255,255,0.02); border-color:var(--color-border); display:flex; flex-direction:column; justify-content:space-between;">
+            <div>
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div style="font-size:2.5rem; margin-bottom:8px;">🎯</div>
+                    <span class="badge badge-warning">Intermediate</span>
+                </div>
+                <h4 style="margin:0 0 6px; font-size:1rem;">COCO128 Starter</h4>
+                <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">128 labeled COCO images — enough to watch mAP actually improve during training.</p>
+                <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:0.7rem;">
+                    <span class="badge badge-info">80 classes (COCO)</span>
+                    <span class="badge badge-warning">~6 MB · 128 images</span>
+                </div>
+                <div style="margin-top:10px; font-size:0.7rem; display:flex; gap:12px;">
+                    <a href="/Dataset/DownloadSample/coco128" download title="Download the raw dataset ZIP">⬇ ZIP</a>
+                    <a href="https://github.com/ultralytics/assets/releases/download/v0.0.0/coco128.zip" target="_blank" rel="noopener" title="Official source on GitHub">GitHub ↗</a>
+                </div>
+            </div>
+            <form asp-action="InstallSample" asp-controller="Dataset" method="post" class="sample-install-form" style="margin-top:12px;">
+                <input type="hidden" name="key" value="coco128" />
+                <button type="submit" class="btn btn-primary btn-sm w-100">Use Dataset →</button>
+            </form>
+        </div>
+
+        <!-- DOTA8 -->
+        <div class="card p-3" style="background:rgba(255,255,255,0.02); border-color:var(--color-border); display:flex; flex-direction:column; justify-content:space-between;">
+            <div>
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div style="font-size:2.5rem; margin-bottom:8px;">🛰️</div>
+                    <span class="badge badge-error">Advanced</span>
+                </div>
+                <h4 style="margin:0 0 6px; font-size:1rem;">DOTA8 Aerial (OBB)</h4>
+                <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">Aerial drone images with rotated bounding boxes — oriented object detection demo.</p>
+                <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:0.7rem;">
+                    <span class="badge badge-info">15 classes (OBB)</span>
+                    <span class="badge badge-warning">~1 MB · 8 images</span>
+                </div>
+                <div style="margin-top:10px; font-size:0.7rem; display:flex; gap:12px;">
+                    <a href="/Dataset/DownloadSample/dota8" download title="Download the raw dataset ZIP">⬇ ZIP</a>
+                    <a href="https://github.com/ultralytics/assets/releases/download/v0.0.0/dota8.zip" target="_blank" rel="noopener" title="Official source on GitHub">GitHub ↗</a>
+                </div>
+            </div>
+            <form asp-action="InstallSample" asp-controller="Dataset" method="post" class="sample-install-form" style="margin-top:12px;">
+                <input type="hidden" name="key" value="dota8" />
+                <button type="submit" class="btn btn-primary btn-sm w-100">Use Dataset →</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Real-time install status: disable button + show progress while downloading.
+    document.querySelectorAll('.sample-install-form').forEach(form => {
+        form.addEventListener('submit', () => {
+            const btn = form.querySelector('button');
+            btn.disabled = true;
+            btn.dataset.originalText = btn.textContent;
+            btn.innerHTML = '⏳ Checking / downloading dataset...';
+        });
+    });
+</script>
+
+<!-- Dataset Folders Found on Disk (wwwroot/datasets) -->
+<div class="card mb-4">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <div>
+            <h3>📁 Dataset Folders on Disk</h3>
+            <p class="text-muted text-sm m-0">Every folder inside <code>wwwroot/datasets</code>. If a folder doesn't follow the YOLO structure yet, split it with your own ratios.</p>
+        </div>
+        <span class="text-muted text-sm">Found: @(Model.OnDisk?.Count ?? 0)</span>
+    </div>
+
+    @if (Model.OnDisk != null && Model.OnDisk.Any())
+    {
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Folder</th>
+                        <th>Total Images</th>
+                        <th>In images/train</th>
+                        <th>YOLO Structure</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.OnDisk)
+                    {
+                        <tr>
+                            <td class="fw-600" title="@item.Path">@item.Name</td>
+                            <td>@item.TotalImages</td>
+                            <td>@item.TrainImages</td>
+                            <td>
+                                @if (item.IsYoloStructured)
+                                {
+                                    <span class="badge badge-success">✓ YOLO structured</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-warning">⚠ Not YOLO structured</span>
+                                }
+                            </td>
+                            <td><span class="badge @(item.Status == "Ready" ? "badge-success" : "badge-warning")">@item.Status</span></td>
+                            <td>
+                                @if (!item.IsYoloStructured)
+                                {
+                                    <a asp-action="Split" asp-controller="Dataset"
+                                       asp-route-name="@item.Name"
+                                       asp-route-projectId="@Model.ProjectId"
+                                       class="btn btn-sm btn-primary">✂ Split (@(item.TotalImages) imgs)</a>
+                                }
+                                else if (item.DatasetId != null)
+                                {
+                                    <a asp-action="Analyze" asp-route-id="@item.DatasetId" class="btn btn-sm btn-outline">🔍 Analyze</a>
+                                    <a asp-action="Wizard" asp-controller="Training" asp-route-datasetId="@item.DatasetId" class="btn btn-sm btn-primary">🚀 Train Model</a>
+                                }
+                                else
+                                {
+                                    <form asp-action="RegisterDisk" asp-controller="Dataset" method="post" style="display:inline;">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="name" value="@item.Name" />
+                                        <input type="hidden" name="projectId" value="@Model.ProjectId" />
+                                        <button type="submit" class="btn btn-sm btn-primary">➕ Add to Project &amp; Train →</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <div style="text-align:center; padding:2rem 1rem;">
+            <div style="font-size:2.5rem; margin-bottom:0.75rem;">📂</div>
+            <h4>No dataset folders in wwwroot/datasets</h4>
+            <p class="text-muted mb-0">Install a sample above, upload a ZIP, or copy any dataset folder there.</p>
+        </div>
+    }
+</div>
+
+<!-- Existing Datasets List -->
+<div class="card mb-4">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h3>Your Registered Datasets</h3>
+        <span class="text-muted text-sm">Total: @(Model.Registered?.Count ?? 0)</span>
+    </div>
+
+    @if (Model.Registered != null && Model.Registered.Any())
+    {
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Dataset Name</th>
+                        <th>Total Images</th>
+                        <th>Classes</th>
+                        <th>Split (Train/Val/Test)</th>
+                        <th>Format</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.Registered)
+                    {
+                        <tr>
+                            <td class="fw-600">@item.Name</td>
+                            <td>@item.TotalImages</td>
+                            <td><span class="badge badge-info">@item.Classes</span></td>
+                            <td>@item.TrainCount / @item.ValCount / @item.TestCount</td>
+                            <td>@item.Format</td>
+                            <td><span class="badge badge-success">@item.Status</span></td>
+                            <td>
+                                <a asp-action="Analyze" asp-route-id="@item.Id" class="btn btn-sm btn-outline">🔍 Analyze</a>
+                                <a asp-action="Split" asp-controller="Dataset" asp-route-id="@item.Id" class="btn btn-sm btn-outline">✂ Split</a>
+                                <a asp-action="Wizard" asp-controller="Training" asp-route-datasetId="@item.Id" class="btn btn-sm btn-primary">🚀 Train Model</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <div style="text-align:center; padding:3rem 1rem;">
+            <div style="font-size:3rem; margin-bottom:1rem;">📊</div>
+            <h4>No Custom Datasets Uploaded Yet</h4>
+            <p class="text-muted mb-3">Click on any of the 1-Click Install Examples above or upload your own dataset to get started.</p>
+        </div>
+    }
+</div>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - YOLO Vision Studio</title>
+    <meta name="description" content="YOLO Vision Studio - Train, visualize and understand YOLO models" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+
+    <!-- External Libs -->
+    <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.min.js"></script>
+
+    <style>
+        /* Override old sidebar-era layout rules */
+        .app-wrapper { display: block !important; }
+        .main-wrapper { margin-left: 0 !important; }
+        .page-content { margin-left: 0 !important; padding-top: 76px !important; }
+
+        body { padding-top: 0; }
+
+        .topnav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            display: flex; align-items: center; justify-content: space-between;
+            height: 60px; padding: 0 22px;
+            background: color-mix(in srgb, var(--color-bg) 82%, transparent);
+            backdrop-filter: blur(14px);
+            border-bottom: 1px solid var(--color-border);
+        }
+        .tn-left, .tn-right { display: flex; align-items: center; gap: 6px; }
+        .brand {
+            display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.05rem;
+            color: var(--text-primary); text-decoration: none; margin-right: 18px;
+        }
+        .brand svg { width: 20px; height: 20px; color: var(--color-primary-end); }
+        .tn-link {
+            padding: 8px 14px; border-radius: 10px; font-size: 0.875rem; font-weight: 500;
+            color: var(--text-secondary); text-decoration: none; transition: all .15s;
+        }
+        .tn-link:hover { color: var(--text-primary); background: rgba(124,58,237,0.08); }
+        .tn-link.active { color: var(--color-primary-end); background: rgba(124,58,237,0.12); font-weight: 600; }
+    </style>
+</head>
+<body>
+    @{
+        var ctrl = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    }
+
+    <nav class="topnav">
+        <div class="tn-left">
+            <a href="/" class="brand"><i data-feather="box"></i> YOLO Studio</a>
+            <a href="@Url.Action("Index", "Home")" class="tn-link @(ctrl=="Home"?"active":"")">Dashboard</a>
+            <a href="@Url.Action("Index", "Dataset")" class="tn-link @(ctrl=="Dataset"?"active":"")">Datasets</a>
+            <a href="@Url.Action("Wizard", "Training")" class="tn-link @(ctrl=="Training"?"active":"")">Train</a>
+            <a href="@Url.Action("History", "Training")" class="tn-link @(ctrl=="Training"&&ViewContext.RouteData.Values["action"]?.ToString()=="History"?"active":"")">Jobs</a>
+        </div>
+        <div class="tn-right">
+            <div id="engineStatus" style="display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);font-size:0.72rem;" title="Python AI Engine status">
+                <span id="engineDot" style="width:7px;height:7px;border-radius:50%;background:#10b981;"></span>
+                <span id="engineLabel" style="color:#10b981;font-weight:600;">AI Engine OK</span>
+            </div>
+            <button class="icon-btn" id="theme-toggle"><i data-feather="sun"></i></button>
+        </div>
+    </nav>
+
+    <main class="page-content">
+        @RenderBody()
+    </main>
+
+    <!-- Scripts -->
+    <script src="~/js/app.js" asp-append-version="true"></script>
+    <script src="~/js/charts.js" asp-append-version="true"></script>
+    <script src="~/js/neural-network-viz.js" asp-append-version="true"></script>
+    <script>
+        // Python AI engine health check (every 15s)
+        async function checkEngineHealth() {
+            const dot = document.getElementById('engineDot');
+            const lbl = document.getElementById('engineLabel');
+            if (!dot) return;
+            try {
+                const r = await fetch('http://localhost:8000/health', { signal: AbortSignal.timeout(2500) });
+                if (r.ok) { dot.style.background = '#10b981'; lbl.style.color = '#10b981'; lbl.textContent = 'AI Engine OK'; }
+                else throw new Error();
+            } catch {
+                dot.style.background = '#ef4444'; lbl.style.color = '#ef4444'; lbl.textContent = 'AI Engine Offline';
+            }
+        }
+        checkEngineHealth();
+        setInterval(checkEngineHealth, 15000);
+    </script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

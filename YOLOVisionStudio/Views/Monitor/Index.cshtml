@@ -1,0 +1,31 @@
+@{
+    ViewData["Title"] = "System Monitor";
+}
+<div class="grid grid-cols-2">
+    <div class="glass-card">
+        <h3>GPU Status (NVIDIA RTX 4090)</h3>
+        <div class="grid grid-cols-2" style="margin-top: 16px;">
+            <div>
+                <div class="metric-label">Utilization</div>
+                <div class="metric-value gradient-text">84%</div>
+            </div>
+            <div>
+                <div class="metric-label">Memory</div>
+                <div class="metric-value text-warning">20GB / 24GB</div>
+            </div>
+        </div>
+    </div>
+    <div class="glass-card">
+        <h3>System Status</h3>
+        <div class="grid grid-cols-2" style="margin-top: 16px;">
+            <div>
+                <div class="metric-label">CPU</div>
+                <div class="metric-value">42%</div>
+            </div>
+            <div>
+                <div class="metric-label">RAM</div>
+                <div class="metric-value">32GB / 64GB</div>
+            </div>
+        </div>
+    </div>
+</div>

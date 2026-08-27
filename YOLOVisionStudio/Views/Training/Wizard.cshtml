@@ -1,0 +1,347 @@
+@model YOLOVisionStudio.Models.ViewModels.WizardViewModel
+@{
+    ViewData["Title"] = "Train a Model";
+}
+
+<style>
+    /* Stepper */
+    .steps { display:flex; align-items:center; gap:0; margin-bottom:26px; }
+    .step { display:flex; align-items:center; gap:9px; opacity:.45; transition:opacity .2s; }
+    .step.active, .step.done { opacity:1; }
+    .step-num { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+                font-weight:700; font-size:0.85rem; background:var(--color-card); border:2px solid var(--color-border); color:var(--text-secondary); }
+    .step.active .step-num { border-color:var(--color-primary-end); color:var(--color-primary-end); box-shadow:0 0 12px rgba(124,58,237,.35); }
+    .step.done .step-num { background:var(--color-success); border-color:var(--color-success); color:#04140c; }
+    .step-label { font-size:0.82rem; font-weight:600; color:var(--text-secondary); }
+    .step-line { flex:1; height:2px; background:var(--color-border); margin:0 14px; min-width:30px; }
+
+    .wstep { display:none; animation:fadeIn .25s; }
+    .wstep.active { display:block; }
+
+    /* Selection cards */
+    .sel-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:14px; }
+    .sel-card { position:relative; background:var(--color-card); border:1.5px solid var(--color-border); border-radius:var(--radius-lg);
+                padding:16px; cursor:pointer; transition:all .15s; }
+    .sel-card:hover { border-color:var(--color-primary-end); transform:translateY(-2px); }
+    .sel-card.selected { border-color:var(--color-primary-start); box-shadow:0 0 16px rgba(124,58,237,.3); background:rgba(124,58,237,.06); }
+    .sel-card h4 { margin:0 0 6px; font-size:0.95rem; }
+    .sel-card p { margin:0 0 10px; font-size:0.75rem; color:var(--text-muted); line-height:1.5; }
+    .sel-meta { display:flex; flex-wrap:wrap; gap:5px; font-size:0.68rem; }
+    .sel-check { position:absolute; top:10px; right:12px; font-size:1rem; opacity:0; color:var(--color-primary-end); }
+    .sel-card.selected .sel-check { opacity:1; }
+
+    .scale-row { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-top:12px; }
+    .scale-box { text-align:center; padding:12px 8px; border:1.5px solid var(--color-border); border-radius:var(--radius-md); cursor:pointer; transition:all .15s; background:rgba(255,255,255,.02); }
+    .scale-box:hover { border-color:var(--color-primary-end); }
+    .scale-box.selected { border-color:var(--color-primary-end); background:rgba(6,182,212,.12); box-shadow:0 0 10px rgba(6,182,212,.25); }
+    .scale-box b { font-size:1.05rem; display:block; }
+    .scale-box small { color:var(--text-muted); font-size:0.65rem; }
+
+    .wiz-nav { display:flex; justify-content:space-between; margin-top:24px; }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title gradient-text">Train a YOLO Model</h1>
+        <p class="page-subtitle">Pick a dataset, pick a model, tweak settings — watch it learn live.</p>
+    </div>
+</div>
+
+<!-- Stepper -->
+<div class="steps" id="stepper">
+    <div class="step active" data-step="1"><div class="step-num">1</div><div class="step-label">Dataset</div></div>
+    <div class="step-line"></div>
+    <div class="step" data-step="2"><div class="step-num">2</div><div class="step-label">Model</div></div>
+    <div class="step-line"></div>
+    <div class="step" data-step="3"><div class="step-num">3</div><div class="step-label">Settings</div></div>
+    <div class="step-line"></div>
+    <div class="step" data-step="4"><div class="step-num">🚀</div><div class="step-label">Train & Watch</div></div>
+</div>
+
+<form id="wizardForm" method="post" action="/Training/Start">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="ProjectId" value="@Model.ProjectId" />
+    <input type="hidden" name="DatasetId" id="datasetIdInput" value="@Model.DatasetId" />
+    <input type="hidden" name="YoloVersion" id="selectedVersion" value="v11" />
+    <input type="hidden" name="BaseModel" id="selectedScale" value="yolo11n.pt" />
+    <input type="hidden" name="Task" value="detect" />
+
+    <!-- ============ STEP 1: DATASET ============ -->
+    <section class="wstep active" data-step="1">
+        <div class="glass-card" style="padding:22px;">
+            <h3 style="margin:0 0 4px;">Step 1 — Choose what the model should learn</h3>
+            <p style="margin:0 0 18px; font-size:0.85rem; color:var(--text-muted);">
+                The dataset contains labeled images the model learns from. Need one?
+                <a asp-action="Index" asp-controller="Dataset">Get a free sample dataset →</a>
+            </p>
+            @if (Model.Datasets.Any())
+            {
+                <div class="sel-grid">
+                    @foreach (var item in Model.Datasets)
+                    {
+                        var ds = item.Dataset;
+                        if (item.NeedsSplit)
+                        {
+                            <!-- Needs preprocessing: warn + offer split -->
+                            <div class="sel-card" style="cursor:default;border-style:dashed;opacity:.95;">
+                                <h4>@ds.Name</h4>
+                                <p>@(ds.Description ?? "Dataset folder")</p>
+                                <div class="sel-meta" style="margin-bottom:10px;">
+                                    <span class="badge badge-warning">@item.DetectedImages images found</span>
+                                    <span class="badge badge-error">⚠ Not split for YOLO</span>
+                                </div>
+                                <div style="font-size:0.72rem;color:var(--color-warning);margin-bottom:10px;line-height:1.5;">
+                                    This dataset isn't preprocessed into the YOLO <code>images/train · val · test</code> structure yet — split it first to use it for training.
+                                </div>
+                                <a asp-action="Split" asp-controller="Dataset" asp-route-id="@ds.Id" asp-route-returnTo="wizard" class="btn btn-primary btn-sm w-100">✂ Split this dataset (70/15/15) →</a>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="sel-card ds-card @(ds.Id == Model.DatasetId ? "selected" : "")" data-id="@ds.Id">
+                                <span class="sel-check">✔</span>
+                                <h4>@ds.Name</h4>
+                                <p>@(ds.Description ?? "YOLO-format dataset")</p>
+                                <div class="sel-meta">
+                                    <span class="badge badge-info">@ds.TotalImages images</span>
+                                    <span class="badge badge-warning">@ds.TrainCount/@ds.ValCount/@ds.TestCount tr/v/te</span>
+                                    <span class="badge badge-success">@ds.Status</span>
+                                </div>
+                                <div style="margin-top:8px;font-size:0.68rem;">
+                                    <a asp-action="Split" asp-controller="Dataset" asp-route-id="@ds.Id" asp-route-returnTo="wizard" onclick="event.stopPropagation();">✂ re-split</a>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            }
+            else
+            {
+                <div style="text-align:center;padding:34px;">
+                    <div style="font-size:2.6rem;margin-bottom:10px;">📊</div>
+                    <h4>No datasets yet</h4>
+                    <p class="text-muted">Install a free sample dataset first — it takes one click.</p>
+                    <a asp-action="Index" asp-controller="Dataset" class="btn btn-primary">Browse sample datasets →</a>
+                </div>
+            }
+            <div class="wiz-nav">
+                <span></span>
+                <button type="button" class="btn btn-primary" onclick="gotoStep(2)">Next: Choose Model →</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ STEP 2: MODEL ============ -->
+    <section class="wstep" data-step="2">
+        <div class="glass-card" style="padding:22px;">
+            <h3 style="margin:0 0 4px;">Step 2 — Pick the model brain 🧠</h3>
+            <p style="margin:0 0 18px; font-size:0.85rem; color:var(--text-muted);">
+                Newer versions are smarter and faster. The letter is the size — bigger = more accurate but slower.
+                Weights are downloaded once into <code>wwwroot/models</code> and reused afterwards.
+            </p>
+
+            <label style="font-size:0.8rem;font-weight:700;color:var(--text-secondary);">VERSION</label>
+            <div class="sel-grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));margin-top:8px;">
+                <div class="sel-card ver-card selected" data-ver="v11">
+                    <span class="sel-check">✔</span><h4>YOLO11</h4><p>🔥 Latest & best overall.</p>
+                </div>
+                <div class="sel-card ver-card" data-ver="v10"><span class="sel-check">✔</span><h4>YOLO10</h4><p>⚡ NMS-free, low latency.</p></div>
+                <div class="sel-card ver-card" data-ver="v9"><span class="sel-check">✔</span><h4>YOLO9</h4><p>🧠 PGI & GELAN accuracy.</p></div>
+                <div class="sel-card ver-card" data-ver="v8"><span class="sel-check">✔</span><h4>YOLO8</h4><p>📦 Proven industry classic.</p></div>
+                <div class="sel-card ver-card" data-ver="v5"><span class="sel-check">✔</span><h4>YOLO5</h4><p>🌐 Legacy, very light.</p></div>
+            </div>
+
+            <label style="font-size:0.8rem;font-weight:700;color:var(--text-secondary);display:block;margin-top:20px;">SIZE / SPEED TRADE-OFF</label>
+            <div class="scale-row">
+                <div class="scale-box selected" data-scale="n"><b>n</b><small>Nano<br>~2.6M params · fastest</small></div>
+                <div class="scale-box" data-scale="s"><b>s</b><small>Small<br>~9.4M params</small></div>
+                <div class="scale-box" data-scale="m"><b>m</b><small>Medium<br>~20.1M params</small></div>
+                <div class="scale-box" data-scale="l"><b>l</b><small>Large<br>~25.3M params</small></div>
+                <div class="scale-box" data-scale="x"><b>x</b><small>X-Large<br>~56.9M params</small></div>
+            </div>
+            <p style="font-size:0.72rem;color:var(--text-muted);margin-top:10px;">
+                Selected weights file: <code id="modelFileLabel">yolo11n.pt</code>
+            </p>
+
+            <div class="wiz-nav">
+                <button type="button" class="btn btn-outline" onclick="gotoStep(1)">← Back</button>
+                <button type="button" class="btn btn-primary" onclick="gotoStep(3)">Next: Settings →</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ STEP 3: SETTINGS ============ -->
+    <section class="wstep" data-step="3">
+        <div class="glass-card" style="padding:22px;">
+            <h3 style="margin:0 0 4px;">Step 3 — Training settings ⚙️</h3>
+            <p style="margin:0 0 18px; font-size:0.85rem; color:var(--text-muted);">
+                Defaults work great for a first run. Hover any setting for an explanation.
+            </p>
+
+            <div class="grid grid-cols-3 gap-2">
+                <div class="form-group">
+                    <label class="form-label" title="How many times the model sees the whole dataset. More epochs = better learning but longer training. Start with 50–100.">Epochs (full passes over the dataset)</label>
+                    <input type="number" class="form-control" name="Epochs" id="epochsInput" value="100" min="1" max="2000" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label" title="Resolution of images fed to the network. Higher finds smaller objects but needs more memory.">Image size</label>
+                    <select class="form-control" name="ImageSize" id="imgszInput">
+                        <option value="320">320 px — fast</option>
+                        <option value="640" selected>640 px — standard</option>
+                        <option value="1280">1280 px — high detail</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" title="How many images are processed at once. Bigger batches train smoother but use more memory.">Batch size</label>
+                    <select class="form-control" name="BatchSize" id="batchInput">
+                        <option value="4">4 — low memory / CPU</option>
+                        <option value="8">8</option>
+                        <option value="16" selected>16 — standard GPU</option>
+                        <option value="32">32 — high VRAM</option>
+                    </select>
+                </div>
+            </div>
+
+            <details style="margin-top:18px;">
+                <summary style="cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--color-primary-end);">Advanced settings (optional)</summary>
+                <div class="grid grid-cols-3 gap-2" style="margin-top:14px;">
+                    <div class="form-group">
+                        <label class="form-label" title="SGD = stable & simple. AdamW = faster convergence. Auto picks the best.">Optimizer</label>
+                        <select class="form-control" name="Optimizer"><option value="auto" selected>Auto</option><option>SGD</option><option>Adam</option><option>AdamW</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" title="Learning step size. Too high = unstable, too low = slow.">Learning rate</label>
+                        <input type="text" class="form-control" name="LearningRate" value="0.01" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" title="Regularization to avoid overfitting.">Weight decay</label>
+                        <input type="text" class="form-control" name="WeightDecay" value="0.0005" />
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 mt-2">
+                    <div class="range-group">
+                        <div class="range-label"><span>Mosaic augmentation</span><span id="mosaicVal" class="range-value">1.0</span></div>
+                        <input type="range" name="Mosaic" min="0" max="1" step="0.1" value="1.0" oninput="document.getElementById('mosaicVal').innerText=this.value" />
+                    </div>
+                    <div class="range-group">
+                        <div class="range-label"><span>MixUp augmentation</span><span id="mixupVal" class="range-value">0.0</span></div>
+                        <input type="range" name="MixUp" min="0" max="1" step="0.1" value="0.0" oninput="document.getElementById('mixupVal').innerText=this.value" />
+                    </div>
+                </div>
+            </details>
+
+            <!-- Model prep status -->
+            <div id="modelStatus" style="display:none;align-items:center;gap:8px;padding:9px 13px;border-radius:var(--radius-md);background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.3);font-size:0.78rem;color:var(--text-secondary);margin-top:16px;">
+                <span id="modelStatusIcon">⏳</span><span id="modelStatusText"></span>
+            </div>
+
+            <div class="wiz-nav">
+                <button type="button" class="btn btn-outline" onclick="gotoStep(2)">← Back</button>
+                <button type="submit" class="btn btn-primary" id="startTrainBtn" style="padding:13px 30px;font-size:1rem;">
+                    🚀 Start Training & Open Live View
+                </button>
+            </div>
+        </div>
+    </section>
+</form>
+
+@section Scripts {
+<script>
+let currentStep = 1;
+
+function gotoStep(n) {
+    if (n > currentStep && !validateStep(currentStep)) return;
+    currentStep = n;
+    document.querySelectorAll('.wstep').forEach(s =>
+        s.classList.toggle('active', parseInt(s.dataset.step) === n));
+    document.querySelectorAll('#stepper .step').forEach(s => {
+        const sn = parseInt(s.dataset.step);
+        s.classList.toggle('active', sn === n);
+        s.classList.toggle('done', sn < n);
+        if (sn < n) s.querySelector('.step-num').textContent = '✓';
+        else s.querySelector('.step-num').textContent = sn === 4 ? '🚀' : sn;
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function validateStep(step) {
+    if (step === 1) {
+        const dsId = parseInt(document.getElementById('datasetIdInput').value, 10);
+        if (!dsId) { alert('Please select a dataset first.'); return false; }
+    }
+    return true;
+}
+
+/* Dataset selection */
+document.querySelectorAll('.ds-card').forEach(card => {
+    card.addEventListener('click', () => {
+        document.querySelectorAll('.ds-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        document.getElementById('datasetIdInput').value = card.dataset.id;
+    });
+});
+@if (Model.DatasetId > 0) { <text>currentStep = 2;</text> }
+
+/* Model selection */
+const SCALE_PARAM = { n:'~2.6M', s:'~9.4M', m:'~20.1M', l:'~25.3M', x:'~56.9M' };
+let curVer = 'v11', curScaleLetter = 'n';
+document.querySelectorAll('.ver-card').forEach(c => c.addEventListener('click', () => {
+    document.querySelectorAll('.ver-card').forEach(x => x.classList.remove('selected'));
+    c.classList.add('selected');
+    curVer = c.dataset.ver;
+    updateModelFile();
+}));
+document.querySelectorAll('.scale-box').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.scale-box').forEach(x => x.classList.remove('selected'));
+    b.classList.add('selected');
+    curScaleLetter = b.dataset.scale;
+    updateModelFile();
+}));
+function updateModelFile() {
+    const prefixMap = { v11:'yolo11', v10:'yolov10', v9:'yolov9', v8:'yolov8', v7:'yolov7', v6:'yolov6', v5:'yolo5' };
+    const prefix = prefixMap[curVer] || 'custom_yolo';
+    const file = `${prefix}${curScaleLetter}.pt`;
+    document.getElementById('selectedVersion').value = curVer.replace('v','');
+    document.getElementById('selectedScale').value = file;
+    document.getElementById('modelFileLabel').textContent = `${file} (${SCALE_PARAM[curScaleLetter]} params)`;
+}
+updateModelFile();
+
+/* Model download before start */
+function setModelStatus(icon, text, show = true) {
+    const box = document.getElementById('modelStatus');
+    box.style.display = show ? 'flex' : 'none';
+    document.getElementById('modelStatusIcon').textContent = icon;
+    document.getElementById('modelStatusText').textContent = text;
+}
+async function ensureModelReady(modelName) {
+    try {
+        const st = await (await fetch(`/api/models/status?name=${encodeURIComponent(modelName)}`)).json();
+        if (st.exists) { setModelStatus('✅', `${modelName} already cached (${st.size_mb} MB) — reusing.`); return true; }
+        setModelStatus('⬇️', `Downloading ${modelName} into wwwroot/models ...`);
+        const resp = await fetch('/api/models/ensure', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ model:modelName }) });
+        if (!resp.ok) throw new Error();
+        const info = await resp.json();
+        setModelStatus('✅', `Downloaded ${modelName} (${info.size_mb} MB). Starting...`);
+        return true;
+    } catch {
+        setModelStatus('❌', `Could not prepare ${modelName}. Is the AI Engine running?`);
+        return false;
+    }
+}
+document.getElementById('wizardForm').addEventListener('submit', async function(e) {
+    if (!parseInt(document.getElementById('datasetIdInput').value, 10)) { e.preventDefault(); gotoStep(1); alert('Select a dataset first.'); return; }
+    e.preventDefault();
+    const btn = document.getElementById('startTrainBtn');
+    btn.disabled = true;
+    if (await ensureModelReady(document.getElementById('selectedScale').value)) this.submit();
+    else btn.disabled = false;
+});
+
+@if (Model.DatasetId > 0)
+{
+    <text>document.addEventListener('DOMContentLoaded', () => gotoStep(2));</text>
+}
+feather.replace?.();
+</script>
+}

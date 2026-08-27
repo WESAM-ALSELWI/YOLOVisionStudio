@@ -1,0 +1,368 @@
+@{
+    ViewData["Title"] = "YOLO Training Center";
+}
+
+<style>
+    .param-card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-xl); padding: 1.25rem; margin-bottom: 1.25rem; }
+    .param-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--color-border); padding-bottom: 0.5rem; }
+    .param-info-btn { background: none; border: none; color: var(--color-primary-end); cursor: pointer; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 4px; }
+    .param-explain { display: none; background: rgba(124, 58, 237, 0.08); border-left: 3px solid var(--color-primary-start); padding: 0.75rem 1rem; border-radius: 0 var(--radius-md) var(--radius-md) 0; font-size: 0.8125rem; color: var(--text-secondary); margin-top: 0.5rem; line-height: 1.5; }
+    .param-explain.show { display: block; animation: fadeIn 0.2s; }
+    .scale-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; margin-top: 0.5rem; }
+    .scale-card { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 0.5rem; text-align: center; cursor: pointer; transition: all 0.2s; background: rgba(255,255,255,0.02); }
+    .scale-card:hover { border-color: var(--color-primary-start); }
+    .scale-card.selected { border-color: var(--color-primary-start); background: rgba(124,58,237,0.15); box-shadow: 0 0 10px rgba(124,58,237,0.3); }
+    .scale-name { font-weight: 700; font-size: 0.875rem; color: var(--text-primary); }
+    .scale-sub { font-size: 0.6875rem; color: var(--text-muted); }
+    .version-selector-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-top: 0.5rem; }
+    .version-card { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 0.625rem; text-align: center; cursor: pointer; transition: all 0.2s; background: rgba(255,255,255,0.02); }
+    .version-card:hover { border-color: var(--color-primary-end); }
+    .version-card.selected { border-color: var(--color-primary-end); background: rgba(6,182,212,0.15); box-shadow: 0 0 10px rgba(6,182,212,0.3); }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title gradient-text">YOLO Training Studio</h1>
+        <p class="page-subtitle">Configure model version, dataset, and training hyperparameters</p>
+    </div>
+    <div style="display:flex; gap:10px;">
+        <button type="button" class="btn btn-outline" onclick="toggleMode(this)">
+            🎛️ Mode: <strong id="mode-label" style="color:var(--color-primary-end);">Beginner Mode</strong>
+        </button>
+    </div>
+</div>
+
+<form id="trainConfigForm" method="post" action="/Training/Start">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="ProjectId" value="@Model.ProjectId" />
+    <input type="hidden" name="DatasetId" value="@Model.DatasetId" />
+    
+    <div class="grid grid-cols-3 gap-3">
+        <!-- Left 2 Columns: Architecture & Hyperparameters -->
+        <div style="grid-column: span 2;">
+            
+            <!-- 1. YOLO Version & Scale Selection -->
+            <div class="param-card">
+                <div class="param-card-header">
+                    <h3 style="margin:0; font-size:1.1rem;">1. Select YOLO Architecture Version</h3>
+                    <button type="button" class="param-info-btn" onclick="toggleExplain('exp-ver')">💡 What is YOLO version?</button>
+                </div>
+                <div id="exp-ver" class="param-explain">
+                    <strong>YOLO Architecture Versions:</strong><br/>
+                    • <strong>YOLOv11</strong> (Recommended): Latest state-of-the-art with C3k2 modules and enhanced feature pyramid.<br/>
+                    • <strong>YOLOv10</strong>: NMS-free dual-assignments architecture for low latency.<br/>
+                    • <strong>YOLOv9</strong>: Programmable Gradient Information (PGI) & GELAN for high accuracy.<br/>
+                    • <strong>YOLOv8 / YOLOv7 / YOLOv5</strong>: Industry standard robust architectures for deployment.
+                </div>
+
+                <input type="hidden" name="YoloVersion" id="selectedVersion" value="v11" />
+                <div class="version-selector-grid">
+                    <div class="version-card selected" onclick="selectVersion(this, 'v11')">
+                        <div class="scale-name">YOLOv11</div>
+                        <div class="scale-sub">🔥 Latest & Best</div>
+                    </div>
+                    <div class="version-card" onclick="selectVersion(this, 'v10')">
+                        <div class="scale-name">YOLOv10</div>
+                        <div class="scale-sub">⚡ NMS-Free</div>
+                    </div>
+                    <div class="version-card" onclick="selectVersion(this, 'v9')">
+                        <div class="scale-name">YOLOv9</div>
+                        <div class="scale-sub">🧠 PGI & GELAN</div>
+                    </div>
+                    <div class="version-card" onclick="selectVersion(this, 'v8')">
+                        <div class="scale-name">YOLOv8</div>
+                        <div class="scale-sub">📦 Proven Classic</div>
+                    </div>
+                    <div class="version-card" onclick="selectVersion(this, 'v7')">
+                        <div class="scale-name">YOLOv7</div>
+                        <div class="scale-sub">🛡️ E-ELAN</div>
+                    </div>
+                    <div class="version-card" onclick="selectVersion(this, 'v6')">
+                        <div class="scale-name">YOLOv6</div>
+                        <div class="scale-sub">🏭 Industrial</div>
+                    </div>
+                    <div class="version-card" onclick="selectVersion(this, 'v5')">
+                        <div class="scale-name">YOLOv5</div>
+                        <div class="scale-sub">🌐 Legacy</div>
+                    </div>
+                    <div class="version-card" onclick="selectVersion(this, 'v26')">
+                        <div class="scale-name">Future / Custom</div>
+                        <div class="scale-sub">🔮 Auto-Detect</div>
+                    </div>
+                </div>
+
+                <label style="display:block; margin-top:1rem; font-size:0.875rem; font-weight:600; color:var(--text-secondary);">Model Size / Scale (Pre-trained Weights):</label>
+                <input type="hidden" name="BaseModel" id="selectedScale" value="yolo11n.pt" />
+                <div class="scale-cards">
+                    <div class="scale-card selected" onclick="selectScale(this, 'n', 'Nano (Fastest, ~2.6M params)')">
+                        <div class="scale-name">Nano (n)</div>
+                        <div class="scale-sub">⚡ ~2.6M Params</div>
+                    </div>
+                    <div class="scale-card" onclick="selectScale(this, 's', 'Small (~9.4M params)')">
+                        <div class="scale-name">Small (s)</div>
+                        <div class="scale-sub">🚀 ~9.4M Params</div>
+                    </div>
+                    <div class="scale-card" onclick="selectScale(this, 'm', 'Medium (~20.1M params)')">
+                        <div class="scale-name">Medium (m)</div>
+                        <div class="scale-sub">⚖️ ~20.1M Params</div>
+                    </div>
+                    <div class="scale-card" onclick="selectScale(this, 'l', 'Large (~25.3M params)')">
+                        <div class="scale-name">Large (l)</div>
+                        <div class="scale-sub">🎯 ~25.3M Params</div>
+                    </div>
+                    <div class="scale-card" onclick="selectScale(this, 'x', 'X-Large (~56.9M params)')">
+                        <div class="scale-name">X-Large (x)</div>
+                        <div class="scale-sub">🏆 ~56.9M Params</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Core Hyperparameters -->
+            <div class="param-card">
+                <div class="param-card-header">
+                    <h3 style="margin:0; font-size:1.1rem;">2. Basic Training Parameters</h3>
+                    <button type="button" class="param-info-btn" onclick="toggleExplain('exp-basic')">💡 How do Epochs & Batch Size work?</button>
+                </div>
+                <div id="exp-basic" class="param-explain">
+                    • <strong>Epochs</strong>: Number of times the entire dataset is passed through the network. 100 epochs is recommended for general vision tasks.<br/>
+                    • <strong>Image Size (imgsz)</strong>: Input resolution (e.g. 640). Higher values detect smaller objects but require more VRAM.<br/>
+                    • <strong>Batch Size</strong>: Number of images processed simultaneously. Higher batch size improves gradient estimation but uses more memory.
+                </div>
+
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="form-group">
+                        <label class="form-label">Epochs</label>
+                        <input type="number" class="form-control" name="Epochs" id="epochsInput" value="100" min="1" max="2000" onchange="updateCommand()" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Image Size (imgsz)</label>
+                        <select class="form-control" name="ImageSize" id="imgszInput" onchange="updateCommand()">
+                            <option value="320">320 px (Mobile Fast)</option>
+                            <option value="640" selected>640 px (Standard Default)</option>
+                            <option value="1280">1280 px (High Res / Small Objects)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Batch Size</label>
+                        <select class="form-control" name="BatchSize" id="batchInput" onchange="updateCommand()">
+                            <option value="4">4 (Low VRAM / CPU)</option>
+                            <option value="8">8</option>
+                            <option value="16" selected>16 (Standard GPU)</option>
+                            <option value="32">32 (High VRAM)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Advanced Optimization & Augmentations (hidden in Beginner Mode) -->
+            <div class="param-card" id="advanced-card" style="display:none;">
+                <div class="param-card-header">
+                    <h3 style="margin:0; font-size:1.1rem;">3. Optimizer & Augmentations (Advanced Control)</h3>
+                    <button type="button" class="param-info-btn" onclick="toggleExplain('exp-adv')">💡 Explain Optimizer & Losses</button>
+                </div>
+                <div id="exp-adv" class="param-explain">
+                    • <strong>Optimizer</strong>: SGD is stable for fine-tuning; AdamW converges faster.<br/>
+                    • <strong>Initial LR (lr0)</strong>: Starting learning rate. (Default: 0.01)<br/>
+                    • <strong>Weight Decay</strong>: L2 regularization to prevent overfitting.<br/>
+                    • <strong>Mosaic Augmentation</strong>: Combines 4 images into 1 during training (superb for contextual learning).
+                </div>
+
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="form-group">
+                        <label class="form-label" title="SGD = stable & simple, AdamW = faster convergence. 'auto' picks the best for your setup.">Optimizer</label>
+                        <select class="form-control" name="Optimizer" id="optimizerInput" onchange="updateCommand()">
+                            <option value="auto" selected>Auto (Recommended)</option>
+                            <option value="SGD">SGD</option>
+                            <option value="Adam">Adam</option>
+                            <option value="AdamW">AdamW</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" title="Step size the model takes while learning. Too high = unstable, too low = very slow.">Initial LR (lr0)</label>
+                        <input type="text" class="form-control" name="LearningRate" id="lrInput" value="0.01" onchange="updateCommand()" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" title="Penalty on large weights — helps prevent overfitting. 0.0005 is a safe default.">Weight Decay</label>
+                        <input type="text" class="form-control" name="WeightDecay" value="0.0005" />
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 mt-2">
+                    <div class="range-group">
+                        <div class="range-label"><span title="Stitches 4 images into one during training — great for small datasets.">Mosaic Augmentation</span><span id="mosaicVal" class="range-value">1.0</span></div>
+                        <input type="range" name="Mosaic" min="0" max="1" step="0.1" value="1.0" oninput="document.getElementById('mosaicVal').innerText = this.value" />
+                    </div>
+                    <div class="range-group">
+                        <div class="range-label"><span title="Blends two images together. Useful for harder scenes; keep low for simple tasks.">MixUp Augmentation</span><span id="mixupVal" class="range-value">0.0</span></div>
+                        <input type="range" name="MixUp" min="0" max="1" step="0.1" value="0.0" oninput="document.getElementById('mixupVal').innerText = this.value" />
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Column: Live CLI Command & Start Action -->
+        <div>
+            <!-- Live Command Card -->
+            <div class="param-card" style="border-color:var(--color-primary-start); box-shadow:0 0 20px rgba(124,58,237,0.15);">
+                <div class="param-card-header">
+                    <h3 style="margin:0; font-size:1.1rem; color:var(--color-primary-end);">⚡ Generated YOLO CLI Command</h3>
+                </div>
+                <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0;">This is the exact command executed automatically by the FastAPI AI Engine:</p>
+                <div class="code-block" id="commandPreview" style="color:var(--color-success); font-size:0.8125rem; min-height:80px;">
+                    yolo train model=yolo11n.pt data=data.yaml epochs=100 imgsz=640 batch=16 optimizer=auto lr0=0.01
+                </div>
+            </div>
+
+            <!-- Start Action Card -->
+            <div class="param-card">
+                <h4 style="margin:0 0 8px;">Estimated Duration</h4>
+                <div style="font-size:1.75rem; font-weight:700; color:var(--color-primary-end); margin-bottom:1rem;" id="estTime">~ 45 minutes</div>
+
+                @if (!ViewData.ModelState.IsValid || TempData["ErrorMessage"] != null)
+                {
+                    <div class="param-explain show" style="background:rgba(239,68,68,0.08); border-left-color:#ef4444; color:var(--color-error); margin-bottom:10px;">
+                        ⚠️ @TempData["ErrorMessage"]
+                        @Html.ValidationSummary(excludePropertyErrors: true)
+                    </div>
+                }
+
+                <!-- Live model preparation status -->
+                <div id="modelStatus" style="display:none; align-items:center; gap:8px; padding:8px 12px; border-radius:var(--radius-md); background:rgba(6,182,212,0.08); border:1px solid rgba(6,182,212,0.3); font-size:0.78rem; color:var(--text-secondary); margin-bottom:10px;">
+                    <span id="modelStatusIcon">⏳</span>
+                    <span id="modelStatusText">Preparing model...</span>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100" style="padding:14px; font-size:1.1rem; font-weight:700;" id="startTrainBtn">
+                    🚀 Download Weights & Start Training
+                </button>
+                <p style="font-size:0.7rem; color:var(--text-muted); margin-top:8px;">
+                    Weights are checked in <code>wwwroot/models</code> first — downloaded only on first use.
+                </p>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+    let currentVer = 'v11';
+    let currentScaleLetter = 'n';
+
+    function selectVersion(card, ver) {
+        document.querySelectorAll('.version-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        currentVer = ver;
+        updateModelFilename();
+    }
+
+    function selectScale(card, scaleLetter, desc) {
+        document.querySelectorAll('.scale-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        currentScaleLetter = scaleLetter;
+        updateModelFilename();
+    }
+
+    function updateModelFilename() {
+        let prefix = 'yolo';
+        if (currentVer === 'v11') prefix = 'yolo11';
+        else if (currentVer === 'v10') prefix = 'yolov10';
+        else if (currentVer === 'v9') prefix = 'yolov9';
+        else if (currentVer === 'v8') prefix = 'yolov8';
+        else if (currentVer === 'v7') prefix = 'yolov7';
+        else if (currentVer === 'v6') prefix = 'yolov6';
+        else if (currentVer === 'v5') prefix = 'yolov5';
+        else prefix = 'custom_yolo';
+
+        const modelFile = prefix + currentScaleLetter + '.pt';
+        document.getElementById('selectedScale').value = modelFile;
+        updateCommand();
+    }
+
+    function updateCommand() {
+        const model = document.getElementById('selectedScale').value;
+        const epochs = document.getElementById('epochsInput').value;
+        const imgsz = document.getElementById('imgszInput').value;
+        const batch = document.getElementById('batchInput').value;
+        const opt = document.getElementById('optimizerInput').value;
+        const lr = document.getElementById('lrInput').value;
+
+        const cmd = `yolo train model=${model} data=data.yaml epochs=${epochs} imgsz=${imgsz} batch=${batch} optimizer=${opt} lr0=${lr}`;
+        document.getElementById('commandPreview').innerText = cmd;
+
+        // Estimate time
+        let mins = Math.round((epochs * (imgsz / 640) * (batch / 16)) * 0.45);
+        if (mins < 1) mins = 1;
+        document.getElementById('estTime').innerText = `~ ${mins} minutes`;
+    }
+
+    function toggleExplain(id) {
+        const el = document.getElementById(id);
+        el.classList.toggle('show');
+    }
+
+    function toggleMode(btn) {
+        const adv = document.getElementById('advanced-card');
+        const label = document.getElementById('mode-label');
+        if (adv.style.display === 'none') {
+            adv.style.display = 'block';
+            label.innerText = 'Advanced Control';
+        } else {
+            adv.style.display = 'none';
+            label.innerText = 'Beginner Mode';
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Model preparation: check wwwroot/models first, download only if missing
+    // ------------------------------------------------------------------
+    function setModelStatus(icon, text, show = true) {
+        const box = document.getElementById('modelStatus');
+        box.style.display = show ? 'flex' : 'none';
+        document.getElementById('modelStatusIcon').textContent = icon;
+        document.getElementById('modelStatusText').textContent = text;
+    }
+
+    async function ensureModelReady(modelName) {
+        try {
+            const statusResp = await fetch(`/api/models/status?name=${encodeURIComponent(modelName)}`);
+            if (statusResp.ok) {
+                const st = await statusResp.json();
+                if (st.exists) {
+                    setModelStatus('✅', `${modelName} already in wwwroot/models (${st.size_mb} MB) — reusing it.`);
+                    return true;
+                }
+            }
+
+            setModelStatus('⬇️', `Downloading ${modelName} into wwwroot/models ...`);
+            const resp = await fetch('/api/models/ensure', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: modelName })
+            });
+            if (!resp.ok) throw new Error('download failed');
+            const info = await resp.json();
+            setModelStatus('✅', `Downloaded ${modelName} (${info.size_mb} MB). Starting training...`);
+            return true;
+        } catch (e) {
+            setModelStatus('❌', `Could not prepare ${modelName}. Check that the AI Engine is running.`);
+            return false;
+        }
+    }
+
+    document.getElementById('trainConfigForm').addEventListener('submit', async function (e) {
+        // Client-side validation before hitting the server.
+        const epochs = parseInt(document.getElementById('epochsInput').value, 10);
+        if (!(epochs >= 1 && epochs <= 2000)) { e.preventDefault(); alert('Epochs must be between 1 and 2000.'); return; }
+
+        e.preventDefault(); // pause submit while we prepare weights
+        const btn = document.getElementById('startTrainBtn');
+        btn.disabled = true;
+
+        const ok = await ensureModelReady(document.getElementById('selectedScale').value);
+        if (ok) {
+            this.submit(); // continue with the original POST
+        } else {
+            btn.disabled = false;
+        }
+    });
+</script>

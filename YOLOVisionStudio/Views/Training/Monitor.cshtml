@@ -1,0 +1,685 @@
+@model YOLOVisionStudio.Models.ViewModels.TrainingMonitorViewModel
+@{
+    ViewData["Title"] = "Training Monitor";
+    var job = Model?.Job;
+    var jobName = job?.Name ?? "Training Job";
+    var statusBadge = job?.Status == YOLOVisionStudio.Models.Domain.JobStatus.Running ? "badge-success" :
+                      job?.Status == YOLOVisionStudio.Models.Domain.JobStatus.Completed ? "badge-info" :
+                      job?.Status == YOLOVisionStudio.Models.Domain.JobStatus.Failed ? "badge-error" : "badge-warning";
+    var pct = (job?.Epochs ?? 0) > 0 ? (int)((job?.CurrentEpoch ?? 0) * 100.0 / (job?.Epochs ?? 1)) : 0;
+}
+
+<style>
+    /* Tabs */
+    .tab-bar { display:flex; gap:6px; border-bottom:2px solid var(--color-border); margin-bottom:18px; }
+    .tab-btn { background:none; border:none; padding:10px 18px; font-size:0.9rem; font-weight:600; color:var(--text-muted); cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .15s; }
+    .tab-btn:hover { color:var(--text-primary); }
+    .tab-btn.active { color:var(--color-primary-end); border-bottom-color:var(--color-primary-end); }
+    .tab-pane { display:none; }
+    .tab-pane.active { display:block; animation: fadeIn .25s; }
+
+    /* ===== CNN-Explainer style network flow ===== */
+    .flow-wrap { position:relative; overflow-x:auto; padding:18px 10px 10px; border:1px solid var(--color-border); border-radius:var(--radius-xl); background:
+        radial-gradient(circle at 20% 10%, rgba(124,58,237,0.05), transparent 40%),
+        radial-gradient(circle at 80% 90%, rgba(6,182,212,0.05), transparent 40%), var(--color-card); }
+    #flowSvg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:1; }
+    .flow { display:flex; align-items:stretch; gap:14px; min-height:340px; position:relative; }
+    .xcol { flex:0 0 auto; width:118px; display:flex; flex-direction:column; position:relative; z-index:2; cursor:pointer; }
+    .xcol:hover .xhead { color:var(--color-primary-end); }
+    .xcol.selected .xmaps { outline:2px solid var(--color-primary-start); outline-offset:3px; border-radius:8px; }
+    .xhead { font-size:0.62rem; font-weight:700; color:var(--text-secondary); text-align:center; margin-bottom:6px; line-height:1.35; }
+    .xhead .fsub { display:block; font-weight:400; }
+    .xmaps { display:flex; flex-direction:column; gap:3px; background:rgba(255,255,255,0.02); border:1px solid var(--color-border); border-radius:8px; padding:5px; }
+    .xmaps img { width:100%; display:block; border-radius:3px; }
+    .xscale { display:flex; align-items:center; gap:4px; margin-top:5px; font-size:0.52rem; color:var(--text-muted); font-family:monospace; }
+    .xscale .sbar { flex:1; height:6px; border-radius:3px; background:linear-gradient(90deg,#cb3b3b,#f8f8fb,#3b87f6); }
+    .farrow { flex:0 0 auto; align-self:center; color:var(--text-muted); font-size:0.8rem; opacity:.5; z-index:2; }
+    .xcol.flash .xmaps { box-shadow:0 0 12px rgba(6,182,212,0.45); }
+    .out-rows { display:flex; flex-direction:column; gap:6px; padding:6px 4px; }
+    .out-row { font-size:0.58rem; color:var(--text-secondary); }
+    .out-row .obar { height:5px; background:linear-gradient(90deg,var(--color-primary-start),var(--color-primary-end)); border-radius:3px; margin-top:2px; transition:width .4s; }
+    .out-row .obg { height:5px; background:rgba(255,255,255,.06); border-radius:3px; margin-top:2px; }
+
+    /* Detail panel under the flow */
+    .detail-grid { display:grid; grid-template-columns:300px 1fr; gap:16px; margin-top:16px; }
+    .detail-channels { display:grid; grid-template-columns:repeat(auto-fill, minmax(120px,1fr)); gap:10px; }
+    .detail-channels figure { margin:0; text-align:center; }
+    .detail-channels img { width:100%; border-radius:8px; border:1px solid var(--color-border); image-rendering:pixelated; }
+    .detail-channels figcaption { font-size:0.65rem; color:var(--text-muted); margin-top:3px; }
+    .meta-row { display:flex; justify-content:space-between; gap:8px; padding:4px 0; border-bottom:1px dashed var(--color-border); font-size:0.75rem; }
+    .meta-row b { color:var(--text-primary); text-align:right; }
+    .from-link { cursor:pointer; color:var(--color-primary-end); text-decoration:none; padding:0 2px; }
+    .from-link:hover { text-decoration:underline; }
+
+    .monitor-stat { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 18px; text-align: center; position: relative; overflow: hidden; }
+    .monitor-stat::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,var(--color-primary-start),var(--color-primary-end)); }
+    .monitor-stat-val { font-size: 1.9rem; font-weight: 700; color: var(--color-primary-end); margin-bottom: 4px; }
+    .monitor-stat-label { font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .log-area { background:#000; border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:16px; font-family:monospace; font-size:0.78rem; height:420px; overflow-y:auto; color:#4ade80; }
+    .log-line { margin-bottom:4px; opacity:.9; }
+</style>
+
+<!-- Header -->
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+    <div>
+        <h1 style="font-size:1.35rem;font-weight:700;display:flex;align-items:center;gap:12px;">
+            @jobName
+            <span class="badge @statusBadge">
+                @if (job?.Status == YOLOVisionStudio.Models.Domain.JobStatus.Running)
+                {
+                    <span class="pulse-dot" style="margin-right:5px;"></span>
+                }
+                @(job?.Status.ToString() ?? "Unknown")
+            </span>
+        </h1>
+        <div style="color:var(--text-secondary);font-size:0.85rem;margin-top:4px;">
+            <strong>@(job?.YoloVersion ?? "YOLO") @(job?.BaseModel ?? "")</strong> ·
+            Epoch <strong id="currentEpochDisplay">@(job?.CurrentEpoch ?? 0)</strong>/<strong>@(job?.Epochs ?? 100)</strong> ·
+            <span id="iterInfo">batch –</span>
+        </div>
+        <div class="progress" style="width:min(420px,100%);margin-top:8px;height:9px;">
+            <div class="progress-bar" id="epochProgressBar" style="width:@pct%;transition:width .5s ease;"></div>
+        </div>
+    </div>
+    <div style="display:flex;gap:8px;">
+        <a href="@Url.Action("History","Training")" class="btn btn-secondary">← Back</a>
+        <button class="btn btn-outline" title="Ultralytics trains in native PyTorch loops — pausing mid-run is not supported. Use Stop instead."
+                onclick="alert('Pause is not supported by the YOLO runtime.\nUse Stop instead — resume later from last.pt.')">⏸ Pause</button>
+        @if (job?.Status == YOLOVisionStudio.Models.Domain.JobStatus.Running)
+        {
+            <button class="btn btn-danger" id="stopBtn" onclick="stopTraining()">⏹ Stop</button>
+        }
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="tab-bar">
+    <button class="tab-btn active" data-tab="tab-live">🧠 Live Network</button>
+    <button class="tab-btn" data-tab="tab-metrics">📈 Metrics</button>
+    <button class="tab-btn" data-tab="tab-log">📋 Logs</button>
+    <div style="margin-left:auto;display:flex;align-items:center;">
+        <span id="wsState" class="badge badge-warning">Connecting…</span>
+    </div>
+</div>
+
+<!-- ================= TAB: LIVE NETWORK ================= -->
+<div class="tab-pane active" id="tab-live">
+    <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 10px;">
+        The REAL augmented image (its R/G/B channels) flows left→right through every layer of the running YOLO.
+        Red = negative activation, blue = positive (scales under each column are real values).
+        Lines show how every feature map feeds the next stage. <b>Click any column</b> to inspect its filters, weights, gradients.
+    </p>
+
+    <div class="flow-wrap" id="flowWrap">
+        <svg id="flowSvg"></svg>
+        <div class="flow" id="flowRow">
+            <div style="padding:24px;color:var(--text-muted);font-size:0.8rem;">Waiting for the first capture from the training process…</div>
+        </div>
+    </div>
+    <div style="display:flex;gap:18px;margin-top:8px;font-size:0.7rem;color:var(--text-secondary);flex-wrap:wrap;">
+        <span><span style="display:inline-block;width:22px;height:8px;border-radius:3px;background:linear-gradient(90deg,#cb3b3b,#f8f8fb,#3b87f6);"></span> activation value (− → +)</span>
+        <span style="color:var(--color-primary-end);">⌇ dashed curve = skip / branch connection</span>
+        <span>🖼️ input column = the actual R, G, B channels of the augmented training image</span>
+    </div>
+
+    <!-- Backpropagation strength per layer -->
+    <div class="glass-card" id="gradCard" style="margin-top:16px;padding:16px 20px;display:none;">
+        <h4 style="margin:0 0 4px;">⚡ Backpropagation — how much each layer is learning right now</h4>
+        <p style="margin:0 0 10px;font-size:0.72rem;color:var(--text-muted);">
+            Bar height = L2 norm of the weight gradients computed by the last <code>loss.backward()</code>.
+            Taller bar = gradients are flowing strongly into that layer's weights.
+        </p>
+        <div id="gradBars" style="display:flex;align-items:flex-end;gap:3px;height:96px;"></div>
+        <div id="gradLabels" style="display:flex;gap:3px;margin-top:4px;"></div>
+    </div>
+
+    <!-- Live classifier: what the network currently recognizes -->
+    <div class="glass-card" id="classifierCard" style="margin-top:16px;padding:16px 20px;display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
+            <h4 style="margin:0;">🏷️ Live Classifier</h4>
+            <span style="font-size:0.7rem;color:var(--text-muted);" id="clsSummary"></span>
+        </div>
+
+        <div style="font-size:0.68rem;font-weight:700;color:var(--text-muted);margin-bottom:6px;">CLASS PROBABILITIES — RAW HEAD OUTPUT (what the network believes, before NMS)</div>
+        <div id="classList" style="display:flex;flex-direction:column;gap:5px;"></div>
+
+        <div style="font-size:0.68rem;font-weight:700;color:var(--text-muted);margin:14px 0 6px;">DETECTIONS AFTER CONFIDENCE FILTERING (NMS) — drawn on the prediction node above</div>
+        <div id="detList" style="display:flex;flex-direction:column;gap:5px;"></div>
+    </div>
+
+    <!-- Layer detail -->
+    <div class="detail-grid" id="detailPanel" style="display:none;">
+        <div class="glass-card" style="padding:16px;">
+            <h4 style="margin:0 0 6px;" id="detailTitle">Layer</h4>
+            <div style="font-size:0.75rem;color:var(--text-muted);line-height:1.7;" id="detailMeta"></div>
+            <hr style="border-color:var(--color-border);opacity:.3;" />
+            <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.6;" id="detailExplain"></div>
+        </div>
+        <div class="glass-card" style="padding:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <h4 style="margin:0;">Real output feature maps</h4>
+                <button class="btn btn-outline" style="font-size:0.72rem;padding:3px 10px;" onclick="refreshDetail()">↻ Refresh</button>
+            </div>
+            <div class="detail-channels" id="detailChannels"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= TAB: METRICS ================= -->
+<div class="tab-pane" id="tab-metrics">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;">
+        <div class="monitor-stat"><div class="monitor-stat-val gradient-text" id="stat-map50">@(job?.BestmAP50.ToString("F3") ?? "0.000")</div><div class="monitor-stat-label">mAP50</div></div>
+        <div class="monitor-stat"><div class="monitor-stat-val" id="stat-map5095" style="color:var(--color-success);">@(job?.BestmAP5095.ToString("F3") ?? "0.000")</div><div class="monitor-stat-label">mAP50-95</div></div>
+        <div class="monitor-stat"><div class="monitor-stat-val" id="stat-lr" style="color:var(--color-warning);">–</div><div class="monitor-stat-label">Learning Rate</div></div>
+        <div class="monitor-stat"><div class="monitor-stat-val" id="stat-eta" style="color:var(--color-info);">–</div><div class="monitor-stat-label">ETA</div></div>
+    </div>
+    <div class="grid grid-cols-2" style="margin-bottom:18px;">
+        <div class="glass-card">
+            <h4 style="margin-bottom:14px;">📉 Losses (live per batch)</h4>
+            <div style="height:270px;"><canvas id="lossChart"></canvas></div>
+        </div>
+        <div class="glass-card">
+            <h4 style="margin-bottom:14px;">📈 Accuracy (per epoch)</h4>
+            <div style="height:270px;"><canvas id="accChart"></canvas></div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= TAB: LOGS ================= -->
+<div class="tab-pane" id="tab-log">
+    <div class="glass-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h4 style="margin:0;">📋 Training Log</h4>
+            <button class="btn btn-outline" style="font-size:0.75rem;padding:4px 10px;" onclick="document.getElementById('trainLog').innerHTML=''">Clear</button>
+        </div>
+        <div class="log-area" id="trainLog">
+            <div class="log-line">[INFO] Monitor ready.</div>
+            @if (job != null)
+            {
+                <div class="log-line">[INFO] Job: @job.Name | Model: @job.YoloVersion | Epochs: @job.Epochs | Batch: @job.BatchSize | ImgSz: @job.ImageSize</div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+const jobId = @(job?.Id ?? 0);
+const pythonJobId = "@(job?.PythonJobId ?? "")";
+const totalEpochs = @(job?.Epochs ?? 100);
+const AI_ENGINE = 'http://localhost:8000';
+
+/* ============ Tabs ============ */
+let chartsReady = false;
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.tab).classList.add('active');
+        if (btn.dataset.tab === 'tab-metrics') {
+            if (!chartsReady) { initCharts(); chartsReady = true; }
+            lossChart?.resize(); accChart?.resize();
+        }
+    });
+});
+
+function addLog(msg, type='') {
+    const log = document.getElementById('trainLog');
+    const line = document.createElement('div');
+    line.className = 'log-line ' + type;
+    line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+}
+
+/* ============ Charts ============ */
+let lossChart, accChart;
+let epochsData = [], boxLossData = [], clsLossData = [], dflLossData = [];
+let precData = [], recData = [], map50Data = [], map5095Data = [];
+let startTime = Date.now();
+
+function initCharts() {
+    const mk = (ctx, datasets, yOpts={}) => new Chart(ctx, {
+        type:'line',
+        data:{ labels:epochsData, datasets },
+        options:{ responsive:true, maintainAspectRatio:false, animation:{duration:250},
+            plugins:{ legend:{ labels:{ color:'#94a3b8', boxWidth:12, font:{size:11} } } },
+            scales:{ x:{ ticks:{ color:'#64748b', maxTicksLimit:10 }, grid:{ color:'rgba(255,255,255,0.05)' } },
+                     y:{ ticks:{ color:'#64748b' }, grid:{ color:'rgba(255,255,255,0.05)' }, ...yOpts } } }
+    });
+    lossChart = mk(document.getElementById('lossChart').getContext('2d'), [
+        { label:'Box Loss', data:boxLossData, borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,.1)', fill:true, tension:.4, pointRadius:1 },
+        { label:'Cls Loss', data:clsLossData, borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,.1)', fill:true, tension:.4, pointRadius:1 },
+        { label:'DFL Loss', data:dflLossData, borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,.1)', fill:true, tension:.4, pointRadius:1 },
+    ]);
+    accChart = mk(document.getElementById('accChart').getContext('2d'), [
+        { label:'mAP50', data:map50Data, borderColor:'#7c3aed', fill:true, tension:.4, pointRadius:2 },
+        { label:'mAP50-95', data:map5095Data, borderColor:'#06b6d4', fill:true, tension:.4, pointRadius:2 },
+        { label:'Precision', data:precData, borderColor:'#10b981', tension:.4, pointRadius:2 },
+        { label:'Recall', data:recData, borderColor:'#f97316', tension:.4, pointRadius:2 },
+    ], { min:0, max:1 });
+}
+
+function updateETA(currentEpoch) {
+    if (currentEpoch <= 0) return;
+    const elapsed = (Date.now() - startTime) / 1000;
+    const remaining = Math.round((elapsed / currentEpoch) * (totalEpochs - currentEpoch));
+    const h = Math.floor(remaining/3600), m = Math.floor((remaining%3600)/60), s = remaining%60;
+    document.getElementById('stat-eta').textContent = h > 0 ? `${h}h ${m}m` : `${m}m ${s}s`;
+}
+
+/* ============ Live Network Flow (CNN-Explainer style) ============ */
+const flowRow = document.getElementById('flowRow');
+let builtStageCount = -1;
+let lastPipelineLen = 0;
+let lastPipeline = [];
+let selectedLayer = null;
+let lastFrameData = null;
+
+function explainFor(stage, total) {
+    const isHead = stage.is_head;
+    if (isHead) return 'The detection head predicts bounding boxes and class probabilities at three different scales — small objects on the fine grid, large objects on the coarse grid.';
+    const pos = stage.index / Math.max(1, total - 1);
+    if (pos < 0.25) return 'Early layers act like edge & color detectors: they pick up simple patterns such as lines, corners, and basic textures from the input image.';
+    if (pos < 0.55) return 'Middle layers combine simple patterns into object parts — wheels, windows, heads, textures that repeat across many objects.';
+    if (pos < 0.85) return 'Deep layers understand whole objects and their positions. Each small cell in these maps now "recognizes" meaningful shapes.';
+    return 'Final feature blocks feed the detection head — everything the network learned about what is in the image and where it is gets compressed here.';
+}
+
+function buildFlowSkeleton(pipeline) {
+    flowRow.innerHTML = '';
+    // Input column: the 3 REAL RGB channels arrive via frame updates
+    flowRow.insertAdjacentHTML('beforeend', `
+        <div class="xcol" id="inputCol">
+            <div class="xhead">🖼️ input<br><span class="fsub">R · G · B channels</span></div>
+            <div class="xmaps" id="maps-input"><div style="padding:20px 0;color:var(--text-muted);font-size:0.6rem;">waiting…</div></div>
+        </div><div class="farrow">➜</div>`);
+
+    pipeline.forEach(st => {
+        const sub = st.activation ? st.activation : (st.is_head ? '3 scales' : '');
+        flowRow.insertAdjacentHTML('beforeend', `
+            <div class="xcol" data-key="${st.index}" title="${st.name}">
+                <div class="xhead">#${st.index} ${st.name}<br><span class="fsub">${sub}${st.shape?.length ? ' · ' + st.shape.slice(-3).join('×') : ''}</span></div>
+                <div class="xmaps" id="maps-${st.index}"></div>
+                <div class="xscale"><span id="smin-${st.index}"></span><div class="sbar"></div><span id="smax-${st.index}"></span></div>
+            </div><div class="farrow">➜</div>`);
+    });
+
+    // Output column: real class probabilities from the head
+    flowRow.insertAdjacentHTML('beforeend', `
+        <div class="xcol" id="outputCol">
+            <div class="xhead">🎯 output<br><span class="fsub">class scores</span></div>
+            <div class="xmaps"><div class="out-rows" id="outClasses"><div style="font-size:0.6rem;color:var(--text-muted);padding:14px 0;">waiting…</div></div></div>
+        </div>`);
+
+    flowRow.querySelectorAll('.xcol[data-key]').forEach(col => {
+        col.addEventListener('click', () => selectLayer(col.dataset.key));
+    });
+    builtStageCount = pipeline.length;
+}
+
+/* Connection web: every map in a column connects to every map of the NEXT
+   column (thin gray), plus purple dashed curves for real skip connections. */
+function drawConnections(pipeline) {
+    const wrap = document.getElementById('flowWrap');
+    const svg = document.getElementById('flowSvg');
+    if (!wrap || !svg) return;
+    const NS = 'http://www.w3.org/2000/svg';
+    const row = flowRow;
+
+    // Collect map centers per column key (offset-based → scroll-safe)
+    const colKeys = ['input', ...pipeline.map(s => String(s.index)), 'output'];
+    const centers = {}, bounds = {};
+    colKeys.forEach(key => {
+        const holder = document.getElementById('maps-' + key) || document.getElementById('outClasses');
+        if (!holder) return;
+        const imgs = holder.querySelectorAll('img');
+        const list = [];
+        imgs.forEach(im => {
+            list.push({ x: im.offsetLeft + im.offsetWidth / 2 + holder.offsetLeft,
+                        y: im.offsetTop + im.offsetHeight / 2 + holder.offsetTop });
+        });
+        if (key === 'output') {
+            // use bar rows as anchor points
+            const rows = holder.querySelectorAll('.out-row');
+            rows.forEach(r => list.push({ x: holder.offsetLeft + 30, y: r.offsetTop + r.offsetHeight / 2 + holder.offsetTop }));
+        }
+        if (list.length) { centers[key] = list; bounds[key] = holder; }
+    });
+
+    let html = '';
+    // Web between adjacent columns
+    for (let i = 0; i < pipeline.length + 1; i++) {
+        const aKey = i === 0 ? 'input' : String(pipeline[i - 1].index);
+        const bKey = i === pipeline.length ? 'output' : String(pipeline[i].index);
+        const A = centers[aKey], B = centers[bKey];
+        const aCol = bounds[aKey], bCol = bounds[bKey];
+        if (!A || !B || !aCol || !bCol) continue;
+        const x1 = aCol.offsetLeft + aCol.offsetWidth + 4, x2 = bCol.offsetLeft - 4;
+        A.forEach(pa => {
+            B.forEach(pb => {
+                const y1 = pa.y, y2 = pb.y;
+                const my = (y1 + y2) / 2;
+                html += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#94a3b8" stroke-width="0.6" opacity="0.16" />`;
+            });
+        });
+    }
+    // Real skip/branch connections (from Ultralytics .f indices)
+    const pos = {};
+    pipeline.forEach(st => {
+        const col = flowRow.querySelector(`.xcol[data-key="${st.index}"]`);
+        if (col) pos[st.index] = col;
+    });
+    for (const st of pipeline) {
+        if (typeof st.index !== 'number') continue;
+        for (const src of (st.from || [])) {
+            if (src < 0 || st.index - src === 1) continue;
+            const s = pos[src], t = pos[st.index];
+            if (!s || !t) continue;
+            const x1 = s.offsetLeft + s.offsetWidth, y1 = s.offsetTop + 20;
+            const x2 = t.offsetLeft, y2 = t.offsetTop + t.offsetHeight / 2;
+            const mx = (x1 + x2) / 2;
+            html += `<path d="M${x1},${y1} C${mx},${y1 - 40} ${mx},${y2 - 40} ${x2},${y2}"
+                       fill="none" stroke="rgba(124,58,237,0.7)" stroke-width="1.5" stroke-dasharray="5,4">
+                       <title>#${src} → #${st.index} (${st.name})</title></path>`;
+        }
+    }
+    svg.setAttribute('width', row.scrollWidth);
+    svg.setAttribute('height', row.scrollHeight);
+    svg.innerHTML = html;
+}
+window.addEventListener('resize', () => { if (lastPipeline.length) drawConnections(lastPipeline); });
+
+async function handlePipeline(pipeline) {
+    if (!pipeline || !pipeline.length) return;
+    lastPipelineLen = pipeline.length;
+    lastPipeline = pipeline;
+    if (pipeline.length !== builtStageCount) buildFlowSkeleton(pipeline);
+
+    for (const st of pipeline) {
+        const holder = document.getElementById(`maps-${st.index}`);
+        if (holder) {
+            const sig = st.thumbs.length + ':' + st.thumbs[0].length;
+            if (holder.dataset.sig !== sig) {
+                holder.innerHTML = st.thumbs.map(b => `<img src="data:image/jpeg;base64,${b}" />`).join('');
+                const col = holder.closest('.xcol');
+                col.classList.add('flash');
+                setTimeout(() => col.classList.remove('flash'), 600);
+                holder.dataset.sig = sig;
+            }
+            if (st.scale) {
+                const lo = document.getElementById(`smin-${st.index}`);
+                const hi = document.getElementById(`smax-${st.index}`);
+                if (lo) lo.textContent = st.scale.vmin;
+                if (hi) hi.textContent = st.scale.vmax;
+            }
+        }
+        if (String(selectedLayer) === String(st.index)) refreshDetail();
+    }
+    drawConnections(pipeline);
+}
+
+async function selectLayer(key) {
+    selectedLayer = key;   // numeric layer index or sub-stage key like "0c"
+    flowRow.querySelectorAll('.xcol').forEach(n => n.classList.toggle('selected', n.dataset?.key === String(key) || n.id === 'inputCol' && key === 'input'));
+    document.getElementById('detailPanel').style.display = 'grid';
+    await refreshDetail();
+}
+
+async function refreshDetail() {
+    if (selectedLayer === null) return;
+    const intIdx = parseInt(selectedLayer, 10);
+    if (isNaN(intIdx)) return;   // sub-columns resolve to their parent layer
+    try {
+        const resp = await fetch(`${AI_ENGINE}/training/${pythonJobId}/live-layer/${intIdx}`);
+        if (!resp.ok) return;
+        const d = await resp.json();
+        if (!d.exists) return;
+
+        const meta = d.meta || {};
+        document.getElementById('detailTitle').textContent = `#${d.index} — ${d.name}`;
+
+        // Rich real metadata rows
+        const rows = [];
+        const cv = meta.conv;
+        if (cv) {
+            rows.push(['Convolution', `<b>${cv.in_channels}→${cv.out_channels} ch</b>`]);
+            rows.push(['Kernel / Filter', `<b>${cv.kernel?.join('×') ?? '?'} × ${cv.out_channels}</b> (one per output map)`]);
+            rows.push(['Stride', `<b>${cv.stride?.join('×') ?? '1'} — step size when sliding</b>`]);
+            rows.push(['Padding', `<b>${cv.padding?.join('×') ?? 0} — border fill to keep size</b>`]);
+            rows.push(['Weights', `<b>${(cv.weight_shape || []).join(' × ')} = ${cv.weight_count.toLocaleString()}</b>`]);
+            rows.push(['Weight stats', `<b>μ=${cv.weight_mean ?? '–'} · σ=${cv.weight_std ?? '–'}</b>`]);
+            rows.push(['Bias', cv.has_bias ? `<b>${cv.bias_count.toLocaleString()} values, added after conv</b>` : '<b>none (BN absorbs it)</b>']);
+        } else {
+            rows.push(['Parameters', `<b>${(meta.params ?? 0).toLocaleString()}</b>`]);
+        }
+        if (meta.bn) rows.push([`Batch Normalization`, `<b style="color:var(--color-success)">✓ ${meta.bn.type}${meta.bn.affine ? ' (learned γ/β)' : ''} — normalizes each feature map</b>`]);
+        if (meta.activation) rows.push(['Activation fn', `<b style="color:var(--color-primary-end)">${meta.activation}</b>`]);
+        const inner = meta.inner || {};
+        if (inner.MaxPool2d) rows.push(['Max Pooling', `<b>${inner.MaxPool2d}× inside — keeps strongest response per window</b>`]);
+        if (inner.AvgPool2d) rows.push(['Average Pooling', `<b>${inner.AvgPool2d}× inside</b>`]);
+        if ((inner.Dropout || 0) + (inner.Dropout2d || 0) > 0)
+            rows.push(['Dropout', `<b>${(inner.Dropout||0)+(inner.Dropout2d||0)}× — randomly zeroes units vs overfitting</b>`]);
+        if (inner.Linear) rows.push(['Fully Connected', `<b>${inner.Linear}× linear layers</b>`]);
+        rows.push(['Output shape', `<b>${(d.shape || []).join(' × ')}</b>`]);
+        const froms = meta.from || [];
+        if (froms.length > 0 && !(froms.length === 1 && froms[0] === d.index - 1)) {
+            rows.push(['Receives from', froms.map(i =>
+                `<span class="from-link" onclick="selectLayer(${i})">#${i}</span>`).join(' + ')]);
+        }
+
+        document.getElementById('detailMeta').innerHTML =
+            rows.map(([k, v]) => `<div class="meta-row"><span style="color:var(--text-muted);white-space:nowrap;">${k}</span><span style="text-align:right;">${v}</span></div>`).join('');
+
+        // Explanation tailored to what this layer really is
+        let explain;
+        if (cv && meta.bn) {
+            explain = `This convolution slides ${cv.kernel?.join('×')} learnable filters over its input with stride ${cv.stride?.join('×')} and padding ${cv.padding?.join('×') ?? 0}, producing ${cv.out_channels} feature maps. Each map is then normalized by BatchNorm and passed through ${meta.activation ?? 'an activation'} — exactly the pipeline visualized above.`;
+        } else if (meta.is_head) {
+            explain = 'The detection head converts deep features into real predictions: for every grid cell (at 3 scales) it outputs box offsets + a class score vector. The scores you see in the Live Classifier come straight from this layer.';
+        } else {
+            explain = explainFor({ index: d.index, is_head: false }, lastPipelineLen || d.index + 1);
+        }
+        document.getElementById('detailExplain').textContent = explain;
+
+        // Real learned filters gallery
+        const grid = document.getElementById('detailChannels');
+        let html = '';
+        if ((d.filters || []).length) {
+            html += `<div style="grid-column:1/-1;font-size:0.7rem;color:var(--text-muted);margin-bottom:2px;">
+                🎛️ REAL LEARNED FILTERS (kernel weights this layer actually uses — they slide across the input):</div>`;
+            html += d.filters.map(f =>
+                `<figure><img src="data:image/jpeg;base64,${f.b64}" style="filter:none;" /><figcaption>${f.label}</figcaption></figure>`).join('');
+            html += '<div style="grid-column:1/-1;font-size:0.7rem;color:var(--text-muted);margin-top:8px;margin-bottom:2px;">OUTPUT FEATURE MAPS produced by those filters on the current image:</div>';
+        }
+        html += d.channels.map(c =>
+            `<figure><img src="data:image/jpeg;base64,${c.b64}" /><figcaption>${c.label}</figcaption></figure>`).join('');
+        if ((d.grads || []).length) {
+            html += '<div style="grid-column:1/-1;font-size:0.7rem;color:var(--text-muted);margin-top:8px;margin-bottom:2px;">⬅ BACKWARD PASS — real gradients (dL/doutput) flowing into this layer:</div>';
+            html += d.grads.map(g =>
+                `<figure><img src="data:image/jpeg;base64,${g.b64}" /><figcaption>${g.label}</figcaption></figure>`).join('');
+        }
+        if ((d.bias_values || []).length) {
+            html += `<div style="grid-column:1/-1;font-size:0.7rem;color:var(--text-muted);margin-top:10px;">
+                Bias values (first ${d.bias_values.length}): <code style="color:var(--text-secondary);">${d.bias_values.join(', ')}</code></div>`;
+        }
+        grid.innerHTML = html;
+    } catch {}
+}
+
+function drawPred(frame) {
+    lastFrameData = frame;
+    // Input column: the three real R/G/B channel maps
+    const inp = document.getElementById('maps-input');
+    if (inp && (frame.input_channels || []).length === 3) {
+        const labels = ['R', 'G', 'B'];
+        inp.innerHTML = frame.input_channels.map((b, i) =>
+            `<div style="position:relative;"><img src="data:image/jpeg;base64,${b}" /><span style="position:absolute;top:2px;left:4px;font-size:0.55rem;font-weight:700;color:#fff;text-shadow:0 1px 2px #000;">${labels[i]}</span></div>`).join('');
+    }
+
+    // Output column: real class scores as bars
+    const outEl = document.getElementById('outClasses');
+    const raw = (frame.classes || []).slice(0, 6);
+    if (outEl && raw.length) {
+        const mx = Math.max(...raw.map(c => c.prob), 0.0001);
+        outEl.innerHTML = raw.map(c => `
+            <div class="out-row">
+                <div style="display:flex;justify-content:space-between;gap:4px;">
+                    <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.name}</span>
+                    <span style="color:var(--text-muted);">${(c.prob * 100).toFixed(1)}%</span>
+                </div>
+                <div class="obg"><div class="obar" style="width:${Math.max(3, Math.round(c.prob / mx * 100))}%;"></div></div>
+            </div>`).join('');
+    }
+    updateClassifier(frame);
+}
+
+function barRow(label, pctText, pct, color) {
+    return `<div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:130px;font-size:0.75rem;font-weight:600;color:var(--text-secondary);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
+        <div style="flex:1;height:14px;background:rgba(255,255,255,.05);border-radius:7px;overflow:hidden;border:1px solid var(--color-border);">
+            <div style="height:100%;width:${pct}%;border-radius:7px;background:${color};transition:width .4s;"></div>
+        </div>
+        <div style="width:46px;font-size:0.72rem;color:${pct >= 50 ? 'var(--color-success)' : 'var(--text-muted)'};font-weight:700;">${pctText}</div>
+    </div>`;
+}
+
+function updateClassifier(frame) {
+    const preds = frame.pred || [];
+    const raw = frame.classes || [];
+    const card = document.getElementById('classifierCard');
+    if (!preds.length && !raw.length) { card.style.display = 'none'; return; }
+    card.style.display = 'block';
+
+    document.getElementById('clsSummary').textContent =
+        `${preds.length} detection${preds.length === 1 ? '' : 's'} · epoch ${frame.epoch} · batch ${frame.batch}`;
+
+    // Raw head scores — the actual classifier output tensor, pre-NMS
+    const clsEl = document.getElementById('classList');
+    if (raw.length) {
+        const mx = Math.max(...raw.map(c => c.prob), 0.0001);
+        clsEl.innerHTML = raw.map((c, i) =>
+            barRow(`${c.name}`, `${(c.prob * 100).toFixed(1)}%`,
+                Math.max(2, Math.round(c.prob / mx * 100)),
+                i === 0 ? 'linear-gradient(90deg,#f59e0b,#ef4444)' : 'rgba(124,58,237,0.55)')).join('');
+    } else clsEl.innerHTML = '<span style="font-size:0.72rem;color:var(--text-muted);">waiting for capture…</span>';
+
+    // Post-NMS detections
+    const detEl = document.getElementById('detList');
+    if (preds.length) {
+        const byClass = {};
+        preds.forEach(p => {
+            if (!byClass[p.name] || p.confidence > byClass[p.name].confidence) byClass[p.name] = p;
+        });
+        const rows = Object.values(byClass).sort((a, b) => b.confidence - a.confidence).slice(0, 8);
+        const counts = {};
+        preds.forEach(p => counts[p.class_id] = (counts[p.class_id] || 0) + 1);
+        detEl.innerHTML = rows.map(p =>
+            barRow(`${p.name} ×${counts[p.class_id]}`, `${(p.confidence * 100).toFixed(0)}%`,
+                Math.round(p.confidence * 100),
+                'linear-gradient(90deg,var(--color-primary-start),var(--color-primary-end))')).join('');
+    } else detEl.innerHTML = '<span style="font-size:0.72rem;color:var(--text-muted);">no detections above 25% confidence in this frame</span>';
+}
+
+/* ============ Metrics handling ============ */
+function applyMetrics(m) {
+    document.getElementById('iterInfo').textContent =
+        `batch ${m.batch ?? '–'}${m.num_batches ? '/' + m.num_batches : ''}`;
+    if ((m.batch ?? 0) > 0 && (m.box_loss ?? 0) > 0 && chartsReady) {
+        epochsData.push(parseFloat(`${m.epoch}.${String(m.batch % 100).padStart(2,'0')}`));
+        boxLossData.push(m.box_loss); clsLossData.push(m.cls_loss); dflLossData.push(m.dfl_loss);
+        lossChart.update('none');
+    }
+    if (chartsReady && m.map50 != null && m.map5095 != null && (m.map50 > 0 || m.map5095 > 0)) {
+        map50Data.push(m.map50); map5095Data.push(m.map5095);
+        precData.push(m.precision ?? 0); recData.push(m.recall ?? 0);
+        accChart.update('none');
+    }
+    if (m.lr) document.getElementById('stat-lr').textContent = Number(m.lr).toExponential(2);
+    if (m.map50 != null && m.map50 > 0) document.getElementById('stat-map50').textContent = Number(m.map50).toFixed(3);
+    if (m.map5095 != null && m.map5095 > 0) document.getElementById('stat-map5095').textContent = Number(m.map5095).toFixed(3);
+    if (m.epoch) {
+        document.getElementById('currentEpochDisplay').textContent = m.epoch;
+        document.getElementById('epochProgressBar').style.width = Math.round(m.epoch * 100 / totalEpochs) + '%';
+        updateETA(m.epoch);
+    }
+}
+
+function setWsState(text, cls) { const el = document.getElementById('wsState'); el.textContent = text; el.className = 'badge ' + cls; }
+
+function handleLiveEvent(msg) {
+    if (msg.status !== undefined) setWsState(
+        msg.status === 'running' ? '● LIVE' : msg.status === 'completed' ? '✓ DONE' :
+        msg.status === 'failed' ? '✕ FAILED' : msg.status.toUpperCase(),
+        msg.status === 'running' ? 'badge-success' : msg.status === 'failed' ? 'badge-error' : 'badge-info');
+    if (msg.error) addLog('Engine error: ' + msg.error, 'error');
+    if (msg.metrics) applyMetrics(msg.metrics);
+    if (msg.frame) drawPred(msg.frame);
+    if (msg.pipeline) handlePipeline(msg.pipeline);
+    if (msg.grad_norms && Object.keys(msg.grad_norms).length) renderGradBars(msg.grad_norms);
+}
+
+function renderGradBars(gn) {
+    const card = document.getElementById('gradCard');
+    card.style.display = 'block';
+    const idxs = Object.keys(gn).map(Number).sort((a, b) => a - b);
+    const mx = Math.max(...Object.values(gn), 1e-9);
+    const bars = idxs.map(i => {
+        const pct = Math.max(3, Math.round(gn[i] / mx * 100));
+        return `<div title="Layer #${i}: grad norm ${gn[i]}" style="flex:1;height:${pct}%;border-radius:3px 3px 0 0;background:linear-gradient(180deg,#ef4444,#7c3aed);min-width:5px;"></div>`;
+    }).join('');
+    document.getElementById('gradBars').innerHTML = bars;
+    document.getElementById('gradLabels').innerHTML =
+        idxs.map(i => `<div style="flex:1;text-align:center;font-size:0.52rem;color:var(--text-muted);min-width:5px;">${i}</div>`).join('');
+}
+
+/* ============ Connections ============ */
+async function connectLiveWebSocket() {
+    if (!pythonJobId) { setWsState('IDLE', 'badge-warning'); addLog('No engine job attached yet.', 'warn'); return; }
+    try {
+        const wsUrl = AI_ENGINE.replace('http', 'ws') + `/ws/training/${pythonJobId}`;
+        const ws = new WebSocket(wsUrl);
+        ws.onopen = () => { setWsState('● LIVE', 'badge-success'); addLog('Live network view connected.'); };
+        ws.onmessage = ev => { try { handleLiveEvent(JSON.parse(ev.data)); } catch {} };
+        ws.onclose = () => setWsState('OFFLINE', 'badge-warning');
+        ws.onerror = () => setWsState('ERROR', 'badge-error');
+    } catch { setWsState('ERROR', 'badge-error'); }
+}
+
+let connection = null;
+async function connectSignalR() {
+    try {
+        connection = new signalR.HubConnectionBuilder().withUrl('/hubs/training')
+            .withAutomaticReconnect([0, 1000, 3000, 5000]).build();
+        connection.on('ReceiveMetrics', (data) => {
+            if (!chartsReady) { initCharts(); chartsReady = true; }
+            const ep = data.epoch ?? data.Epoch ?? 0;
+            map50Data.push(data.mAP50 ?? 0); map5095Data.push(data.mAP5095 ?? 0);
+            accChart.update('none');
+            applyMetrics({ epoch:ep });
+            addLog(`Epoch ${ep}/${totalEpochs} — mAP50 ${(data.mAP50 ?? 0).toFixed(3)}`);
+        });
+        connection.onreconnecting(() => addLog('Reconnecting…', 'warn'));
+        await connection.start();
+        if (jobId > 0) await connection.invoke('JoinJobGroup', jobId.toString());
+    } catch { addLog('SignalR unavailable — live WS still active.', 'warn'); }
+}
+
+async function stopTraining() {
+    if (!confirm('Stop this training job?')) return;
+    const btn = document.getElementById('stopBtn');
+    btn.disabled = true;
+    try {
+        await fetch(`/api/training/${jobId}/stop`, { method:'POST' });
+        addLog('Stop signal sent.', 'warn');
+    } catch (e) { addLog('Error stopping: ' + e.message, 'error'); }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initCharts(); chartsReady = true;   // metrics tab renders instantly now
+    connectSignalR();
+    connectLiveWebSocket();
+});
+</script>
+}

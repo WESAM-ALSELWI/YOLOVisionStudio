@@ -1,0 +1,258 @@
+@{
+    ViewData["Title"] = "Experiment Detail";
+}
+
+<style>
+    .exp-header { background: var(--color-card); border-radius: var(--radius-lg); padding: 25px; border: 1px solid var(--color-border); margin-bottom: 25px; }
+    .tag-chip { display: inline-block; padding: 3px 10px; border-radius: 15px; background: rgba(59, 130, 246, 0.1); color: var(--color-info); font-size: 0.75rem; border: 1px solid rgba(59, 130, 246, 0.2); margin-right: 5px; }
+    
+    .run-table { width: 100%; border-collapse: collapse; background: var(--color-card); border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--color-border); }
+    .run-table th { background: rgba(0,0,0,0.2); padding: 15px; text-align: left; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; border-bottom: 1px solid var(--color-border); }
+    .run-table td { padding: 15px; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+    
+    .chart-container { background: var(--color-card); border-radius: var(--radius-lg); padding: 20px; border: 1px solid var(--color-border); height: 400px; }
+    
+    .artifact-card { display: flex; align-items: center; justify-content: space-between; padding: 15px; background: #0a0c10; border: 1px solid var(--color-border); border-radius: 8px; margin-bottom: 10px; }
+    .artifact-icon { font-size: 2rem; color: var(--color-primary-start); margin-right: 15px; }
+    
+    .notes-area { width: 100%; background: #0a0c10; border: 1px solid var(--color-border); color: var(--text-primary); border-radius: 8px; padding: 15px; min-height: 200px; resize: vertical; }
+    .notes-area:focus { outline: none; border-color: var(--color-primary-start); }
+</style>
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb" style="background: transparent; padding: 0; margin-bottom: 10px;">
+        <li class="breadcrumb-item"><a href="/Experiment">Experiments</a></li>
+        <li class="breadcrumb-item active">Helmet Detection v2</li>
+    </ol>
+</nav>
+
+<div class="exp-header">
+    <div class="d-flex justify-content-between align-items-start">
+        <div>
+            <h2 class="mb-2">Helmet Detection v2 <span class="badge badge-success ml-2" style="font-size: 0.9rem; vertical-align: middle;">Completed</span></h2>
+            <p class="text-secondary mb-3">Main production training pipeline for the helmet detection model. Includes baseline and augmented runs.</p>
+            <div>
+                <span class="tag-chip">production</span>
+                <span class="tag-chip">yolov8</span>
+                <span class="text-muted small ml-3"><i class="far fa-clock mr-1"></i> Created Aug 1, 2026</span>
+            </div>
+        </div>
+        <div>
+            <button class="btn btn-outline mr-2">Edit Details</button>
+            <button class="btn btn-primary"><i class="fas fa-play mr-2"></i> New Run</button>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <h4 class="mb-3">Runs Comparison</h4>
+        <div class="chart-container">
+            <canvas id="mapChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<h4 class="mb-3">Training Runs</h4>
+<table class="run-table mb-5">
+    <thead>
+        <tr>
+            <th style="width: 50px;">Compare</th>
+            <th>Run Name</th>
+            <th>Model</th>
+            <th>Epochs</th>
+            <th>mAP50</th>
+            <th>Precision</th>
+            <th>Recall</th>
+            <th>Date</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="text-center"><input type="checkbox" checked onchange="updateChart()"></td>
+            <td class="font-weight-bold text-primary">Run-4-Final</td>
+            <td>YOLOv8m</td>
+            <td>300</td>
+            <td class="font-weight-bold text-success">89.4%</td>
+            <td>87.1%</td>
+            <td>84.5%</td>
+            <td>Aug 5, 2026</td>
+        </tr>
+        <tr>
+            <td class="text-center"><input type="checkbox" checked onchange="updateChart()"></td>
+            <td class="font-weight-bold">Run-3-Augmented</td>
+            <td>YOLOv8m</td>
+            <td>200</td>
+            <td>86.1%</td>
+            <td>84.2%</td>
+            <td>80.1%</td>
+            <td>Aug 4, 2026</td>
+        </tr>
+        <tr>
+            <td class="text-center"><input type="checkbox" onchange="updateChart()"></td>
+            <td class="font-weight-bold">Run-2-Baseline</td>
+            <td>YOLOv8s</td>
+            <td>150</td>
+            <td>82.4%</td>
+            <td>80.5%</td>
+            <td>75.2%</td>
+            <td>Aug 2, 2026</td>
+        </tr>
+        <tr>
+            <td class="text-center"><input type="checkbox" onchange="updateChart()"></td>
+            <td class="font-weight-bold">Run-1-Test</td>
+            <td>YOLOv8n</td>
+            <td>50</td>
+            <td>65.2%</td>
+            <td>60.1%</td>
+            <td>55.8%</td>
+            <td>Aug 1, 2026</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card p-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="m-0">Experiment Notes</h4>
+                <span class="text-success small" id="saveIndicator"><i class="fas fa-check mr-1"></i> Auto-saved</span>
+            </div>
+            <textarea class="notes-area" oninput="showSaving()">- Run-1: Just to test pipeline.
+- Run-2: Baseline YOLOv8s. Results decent but struggles with small helmets.
+- Run-3: Upgraded to YOLOv8m and added mosaic/mixup. Big jump in mAP.
+- Run-4: Trained for 300 epochs. Plateaued around epoch 280. Final model chosen for deployment.</textarea>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card p-4 h-100">
+            <h4 class="mb-3">Best Run Artifacts <span class="badge badge-primary ml-2">Run-4-Final</span></h4>
+            
+            <div class="artifact-card">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-weight-hanging artifact-icon"></i>
+                    <div>
+                        <h6 class="m-0">Model Weights (PyTorch)</h6>
+                        <span class="small text-muted">best.pt - 42.1 MB</span>
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-outline"><i class="fas fa-download"></i></button>
+            </div>
+            
+            <div class="artifact-card">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-chart-line artifact-icon" style="color: var(--color-info);"></i>
+                    <div>
+                        <h6 class="m-0">Training Plots</h6>
+                        <span class="small text-muted">results.png - 1.2 MB</span>
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-outline"><i class="fas fa-download"></i></button>
+            </div>
+            
+            <div class="artifact-card">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-file-code artifact-icon" style="color: var(--color-warning);"></i>
+                    <div>
+                        <h6 class="m-0">Configuration YAML</h6>
+                        <span class="small text-muted">args.yaml - 2 KB</span>
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-outline"><i class="fas fa-download"></i></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Setup Chart.js
+        const ctx = document.getElementById('mapChart').getContext('2d');
+        
+        // Mock data
+        const epochs = Array.from({length: 300}, (_, i) => i + 1);
+        
+        // Logarithmic curve simulation for training
+        const generateData = (max, speed, stopAt) => {
+            let data = [];
+            for(let i=0; i<300; i++) {
+                if(i > stopAt) {
+                    data.push(null);
+                } else {
+                    let val = max * (1 - Math.exp(-i / speed)) + (Math.random() * 2 - 1);
+                    data.push(val.toFixed(2));
+                }
+            }
+            return data;
+        };
+
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: epochs,
+                datasets: [
+                    {
+                        label: 'Run-4-Final (mAP50)',
+                        data: generateData(89.4, 40, 300),
+                        borderColor: '#7c3aed',
+                        backgroundColor: 'rgba(124, 58, 237, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'Run-3-Augmented (mAP50)',
+                        data: generateData(86.1, 50, 200),
+                        borderColor: '#06b6d4',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        tension: 0.4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { labels: { color: '#e2e8f0' } },
+                    tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', titleColor: '#fff', bodyColor: '#fff' }
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#94a3b8', maxTicksLimit: 15 },
+                        title: { display: true, text: 'Epochs', color: '#94a3b8' }
+                    },
+                    y: {
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#94a3b8' },
+                        title: { display: true, text: 'mAP50 (%)', color: '#94a3b8' },
+                        min: 0, max: 100
+                    }
+                }
+            }
+        });
+        
+        function updateChart() {
+            // In a real app, this would filter datasets based on checkboxes
+            // For demo, we just simulate an update
+            chart.update();
+        }
+
+        let saveTimeout;
+        function showSaving() {
+            let ind = document.getElementById('saveIndicator');
+            ind.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Saving...';
+            ind.className = 'text-warning small';
+            
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => {
+                ind.innerHTML = '<i class="fas fa-check mr-1"></i> Auto-saved';
+                ind.className = 'text-success small';
+            }, 1000);
+        }
+    </script>
+}

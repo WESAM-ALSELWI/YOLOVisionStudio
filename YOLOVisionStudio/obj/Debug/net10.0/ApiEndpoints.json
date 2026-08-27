@@ -1,0 +1,140 @@
+[
+  {
+    "ContainingType": "YOLOVisionStudio.Controllers.Api.ApiProjectController",
+    "Method": "GetProjects",
+    "RelativePath": "api/ApiProject",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "YOLOVisionStudio.Controllers.Api.ApiProjectController",
+    "Method": "CreateProject",
+    "RelativePath": "api/ApiProject",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "project",
+        "Type": "YOLOVisionStudio.Models.Domain.Project",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "YOLOVisionStudio.Controllers.Api.ApiProjectController",
+    "Method": "GetProject",
+    "RelativePath": "api/ApiProject/{id}",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Int32",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "YOLOVisionStudio.Controllers.Api.ApiProjectController",
+    "Method": "DeleteProject",
+    "RelativePath": "api/ApiProject/{id}",
+    "HttpMethod": "DELETE",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Int32",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "YOLOVisionStudio.Controllers.Api.ApiDatasetController",
+    "Method": "GetDatasets",
+    "RelativePath": "api/datasets",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "projectId",
+        "Type": "System.Int32",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "YOLOVisionStudio.Controllers.Api.ApiModelsController",
+    "Method": "Ensure",
+    "RelativePath": "api/models/ensure",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "body",
+        "Type": "YOLOVisionStudio.Controllers.Api.ModelsEnsureBody",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "YOLOVisionStudio.Controllers.Api.ApiModelsController",
+    "Method": "Status",
+    "RelativePath": "api/models/status",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "name",
+        "Type": "System.String",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "YOLOVisionStudio.Controllers.Api.ApiTrainingController",
+    "Method": "Stop",
+    "RelativePath": "api/training/{id}/stop",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Int32",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "YOLOVisionStudio.Controllers.Api.ApiTrainingController",
+    "Method": "Start",
+    "RelativePath": "api/training/start",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "job",
+        "Type": "YOLOVisionStudio.Models.Domain.TrainingJob",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  }
+]

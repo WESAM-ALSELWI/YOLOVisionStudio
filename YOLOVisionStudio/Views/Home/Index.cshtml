@@ -1,0 +1,262 @@
+@model YOLOVisionStudio.Models.ViewModels.DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+    var projectCount = Model?.ProjectCount ?? 0;
+    var datasetCount = Model?.DatasetCount ?? 0;
+    var modelCount   = Model?.ModelCount ?? 0;
+    var activeJobs   = Model?.ActiveJobs ?? 0;
+    var recentProjects = Model?.RecentProjects ?? new List<YOLOVisionStudio.Models.Domain.Project>();
+    var recentJobs     = Model?.RecentJobs ?? new List<YOLOVisionStudio.Models.Domain.TrainingJob>();
+    var cpu = Model?.SystemStats?.CpuUsagePercentage ?? 0;
+    var ram = Model?.SystemStats?.RamUsageMB ?? 0;
+    var ramTotal = Model?.SystemStats?.TotalRamMB ?? 1;
+    var gpu = Model?.SystemStats?.GpuUsagePercentage ?? 0;
+    var gpuName = Model?.SystemStats?.GpuName ?? "GPU";
+}
+
+<!-- Top Stats Row -->
+<div class="grid grid-cols-4" style="margin-bottom:24px;">
+    <div class="metric-card">
+        <div class="metric-icon"><i data-feather="folder"></i></div>
+        <div>
+            <div class="metric-value counter" data-target="@projectCount">0</div>
+            <div class="metric-label">Total Projects</div>
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-icon"><i data-feather="database"></i></div>
+        <div>
+            <div class="metric-value counter" data-target="@datasetCount">0</div>
+            <div class="metric-label">Datasets</div>
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-icon"><i data-feather="cpu"></i></div>
+        <div>
+            <div class="metric-value counter" data-target="@modelCount">0</div>
+            <div class="metric-label">Models Trained</div>
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-icon"><i data-feather="activity"></i></div>
+        <div>
+            <div class="metric-value counter" data-target="@activeJobs">0</div>
+            <div class="metric-label">Active Jobs <span class="pulse-dot" style="margin-left:8px;"></span></div>
+        </div>
+    </div>
+</div>
+
+<div class="grid grid-cols-3">
+    <!-- Left 2 columns -->
+    <div style="grid-column:span 2; display:flex; flex-direction:column; gap:24px;">
+
+        <!-- System Health -->
+        <div class="glass-card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h3 style="margin:0;">System Health</h3>
+                <a href="@Url.Action("Index","Monitor")" class="btn btn-outline" style="font-size:0.8rem;padding:4px 12px;">
+                    <i data-feather="activity" style="width:14px;height:14px;"></i> Full Monitor
+                </a>
+            </div>
+            <div class="grid grid-cols-3" style="gap:16px;">
+                <!-- CPU -->
+                <div style="text-align:center;">
+                    <div style="position:relative;width:90px;height:90px;margin:0 auto 10px;">
+                        <svg viewBox="0 0 36 36" style="transform:rotate(-90deg);width:90px;height:90px;">
+                            <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--color-border)" stroke-width="3"/>
+                            <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--color-primary-start)" stroke-width="3"
+                                stroke-dasharray="@Math.Round(cpu,1) 100" stroke-dashoffset="0" stroke-linecap="round"/>
+                        </svg>
+                        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;color:var(--color-primary-start);">@Math.Round(cpu)%</div>
+                    </div>
+                    <div style="color:var(--text-secondary);font-size:0.875rem;">CPU Usage</div>
+                </div>
+                <!-- RAM -->
+                <div style="text-align:center;">
+                    <div style="position:relative;width:90px;height:90px;margin:0 auto 10px;">
+                        <svg viewBox="0 0 36 36" style="transform:rotate(-90deg);width:90px;height:90px;">
+                            <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--color-border)" stroke-width="3"/>
+                            <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--color-warning)" stroke-width="3"
+                                stroke-dasharray="@Math.Round(ramTotal>0?(ram/ramTotal*100):0,1) 100" stroke-dashoffset="0" stroke-linecap="round"/>
+                        </svg>
+                        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.85rem;color:var(--color-warning);">@Math.Round(ram/1024,1)GB</div>
+                    </div>
+                    <div style="color:var(--text-secondary);font-size:0.875rem;">RAM Used</div>
+                </div>
+                <!-- GPU -->
+                <div style="text-align:center;">
+                    <div style="position:relative;width:90px;height:90px;margin:0 auto 10px;">
+                        <svg viewBox="0 0 36 36" style="transform:rotate(-90deg);width:90px;height:90px;">
+                            <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--color-border)" stroke-width="3"/>
+                            <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--color-success)" stroke-width="3"
+                                stroke-dasharray="@Math.Round(gpu,1) 100" stroke-dashoffset="0" stroke-linecap="round"/>
+                        </svg>
+                        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;color:var(--color-success);">@Math.Round(gpu)%</div>
+                    </div>
+                    <div style="color:var(--text-secondary);font-size:0.875rem;">@gpuName</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Training Jobs -->
+        <div class="glass-card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <h3 style="margin:0;">Recent Training Jobs</h3>
+                <a href="@Url.Action("History","Training")" class="btn btn-outline" style="font-size:0.8rem;padding:4px 12px;">View All</a>
+            </div>
+            @if (recentJobs.Count == 0)
+            {
+                <div style="text-align:center;padding:40px;color:var(--text-muted);">
+                    <i data-feather="inbox" style="width:40px;height:40px;margin-bottom:12px;"></i>
+                    <p>No training jobs yet.</p>
+                    <a href="@Url.Action("Configure","Training")" class="btn btn-primary" style="margin-top:8px;">Start Your First Training</a>
+                </div>
+            }
+            else
+            {
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Job Name</th>
+                                <th>Model</th>
+                                <th>Status</th>
+                                <th>Progress</th>
+                                <th>mAP50</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var job in recentJobs.Take(5))
+                            {
+                                var pct = job.Epochs > 0 ? (int)(job.CurrentEpoch * 100.0 / job.Epochs) : 0;
+                                var badgeCls = job.Status == YOLOVisionStudio.Models.Domain.JobStatus.Running ? "badge-success" :
+                                              job.Status == YOLOVisionStudio.Models.Domain.JobStatus.Completed ? "badge-info" :
+                                              job.Status == YOLOVisionStudio.Models.Domain.JobStatus.Failed ? "badge-error" : "badge-warning";
+                                <tr>
+                                    <td>@job.Name</td>
+                                    <td><span class="badge badge-info">@job.YoloVersion</span></td>
+                                    <td><span class="badge @badgeCls">@job.Status</span></td>
+                                    <td style="min-width:100px;">
+                                        <div class="progress"><div class="progress-bar" style="width:@pct%;"></div></div>
+                                        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">Epoch @job.CurrentEpoch / @job.Epochs</div>
+                                    </td>
+                                    <td>@(job.BestmAP50 > 0 ? job.BestmAP50.ToString("F3") : "-")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <!-- Recent Projects -->
+        @if (recentProjects.Count > 0)
+        {
+            <div class="glass-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                    <h3 style="margin:0;">Recent Projects</h3>
+                    <a href="@Url.Action("Index","Project")" class="btn btn-outline" style="font-size:0.8rem;padding:4px 12px;">All Projects</a>
+                </div>
+                <div class="grid grid-cols-3" style="gap:12px;">
+                    @foreach (var proj in recentProjects.Take(3))
+                    {
+                        <a href="@Url.Action("Detail","Project",new{id=proj.Id})" style="text-decoration:none;">
+                            <div class="metric-card" style="flex-direction:column;align-items:flex-start;gap:8px;padding:16px;cursor:pointer;">
+                                <div style="display:flex;align-items:center;gap:8px;width:100%;">
+                                    <span style="font-size:1.5rem;">
+                                        @(proj.ObjectiveType == YOLOVisionStudio.Models.Domain.ObjectiveType.Detection ? "🎯" :
+                                          proj.ObjectiveType == YOLOVisionStudio.Models.Domain.ObjectiveType.Segmentation ? "🎨" :
+                                          proj.ObjectiveType == YOLOVisionStudio.Models.Domain.ObjectiveType.Pose ? "🧍" : "🔤")
+                                    </span>
+                                    <span style="font-weight:600;font-size:0.875rem;color:var(--text-primary);">@proj.Name</span>
+                                </div>
+                                <div style="font-size:0.75rem;color:var(--text-muted);">@proj.ObjectiveType • @proj.Status</div>
+                                <div style="font-size:0.7rem;color:var(--text-muted);">@proj.UpdatedAt.ToString("MMM dd, yyyy")</div>
+                            </div>
+                        </a>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Right column -->
+    <div style="display:flex;flex-direction:column;gap:16px;">
+
+        <!-- Quick Actions -->
+        <div class="glass-card">
+            <h3 style="margin-bottom:16px;">Quick Actions</h3>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <a href="@Url.Action("Create","Project")" class="btn btn-primary" style="width:100%;justify-content:flex-start;">
+                    <i data-feather="plus" style="width:16px;height:16px;"></i> New Project
+                </a>
+                <a href="@Url.Action("Index","Dataset")" class="btn btn-secondary" style="width:100%;justify-content:flex-start;">
+                    <i data-feather="upload" style="width:16px;height:16px;"></i> Upload Dataset
+                </a>
+                <a href="@Url.Action("Configure","Training")" class="btn btn-secondary" style="width:100%;justify-content:flex-start;">
+                    <i data-feather="play" style="width:16px;height:16px;"></i> Start Training
+                </a>
+                <a href="@Url.Action("Test","Inference")" class="btn btn-secondary" style="width:100%;justify-content:flex-start;">
+                    <i data-feather="image" style="width:16px;height:16px;"></i> Run Inference
+                </a>
+                <a href="@Url.Action("FeatureMaps","Visualization")" class="btn btn-secondary" style="width:100%;justify-content:flex-start;">
+                    <i data-feather="zap" style="width:16px;height:16px;"></i> Explore Feature Maps
+                </a>
+                <a href="@Url.Action("Index","Assistant")" class="btn btn-secondary" style="width:100%;justify-content:flex-start;">
+                    <i data-feather="message-square" style="width:16px;height:16px;"></i> AI Assistant
+                </a>
+            </div>
+        </div>
+
+        <!-- Example Datasets -->
+        <div class="glass-card">
+            <h3 style="margin-bottom:12px;">🚀 Quick Start Examples</h3>
+            <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px;">Ready-to-use datasets with 1-click install</p>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:rgba(255,255,255,0.02);border:1px solid var(--color-border);border-radius:8px;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:1.2rem;">⛑️</span>
+                        <span style="font-size:0.8rem;font-weight:600;">Helmet Detection</span>
+                    </div>
+                    <a href="@Url.Action("InstallExample","Dataset",new{name="HelmetDetection"})" class="btn btn-outline" style="font-size:0.7rem;padding:3px 8px;">Install</a>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:rgba(255,255,255,0.02);border:1px solid var(--color-border);border-radius:8px;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:1.2rem;">🚗</span>
+                        <span style="font-size:0.8rem;font-weight:600;">Traffic Counter</span>
+                    </div>
+                    <a href="@Url.Action("InstallExample","Dataset",new{name="TrafficCounter"})" class="btn btn-outline" style="font-size:0.7rem;padding:3px 8px;">Install</a>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:rgba(255,255,255,0.02);border:1px solid var(--color-border);border-radius:8px;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:1.2rem;">☀️</span>
+                        <span style="font-size:0.8rem;font-weight:600;">Solar Panel Defect</span>
+                    </div>
+                    <a href="@Url.Action("InstallExample","Dataset",new{name="SolarDefect"})" class="btn btn-outline" style="font-size:0.7rem;padding:3px 8px;">Install</a>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:rgba(255,255,255,0.02);border:1px solid var(--color-border);border-radius:8px;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:1.2rem;">🍎</span>
+                        <span style="font-size:0.8rem;font-weight:600;">Fruit Freshness</span>
+                    </div>
+                    <a href="@Url.Action("InstallExample","Dataset",new{name="FruitQuality"})" class="btn btn-outline" style="font-size:0.7rem;padding:3px 8px;">Install</a>
+                </div>
+            </div>
+            <a href="@Url.Action("Index","Dataset")" class="btn btn-primary" style="width:100%;margin-top:12px;font-size:0.8rem;">
+                <i data-feather="plus" style="width:14px;height:14px;"></i> Browse All Datasets
+            </a>
+        </div>
+
+        <!-- YOLO Version Info -->
+        <div class="glass-card" style="background:linear-gradient(135deg,rgba(124,58,237,0.08),rgba(6,182,212,0.08));border-color:rgba(124,58,237,0.2);">
+            <h4 style="margin-bottom:12px;" class="gradient-text">Supported YOLO Versions</h4>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                @foreach (var v in new[]{"v5","v6","v7","v8","v9","v10","v11"})
+                {
+                    <span class="badge badge-info" style="font-size:0.8rem;padding:4px 10px;">YOLO@v</span>
+                }
+            </div>
+            <p style="font-size:0.75rem;color:var(--text-muted);margin-top:10px;">All versions auto-download weights on demand. Supports Nano → X-Large scales.</p>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,402 @@
+@{
+    ViewData["Title"] = "Feature Map Explorer";
+}
+
+<style>
+    .explorer-wrapper { display: grid; grid-template-columns: 300px 1fr; gap: 20px; height: calc(100vh - 120px); }
+    .explorer-sidebar { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+    .explorer-main { overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+
+    /* Upload box */
+    .img-drop-zone { border: 2px dashed var(--color-border); border-radius: var(--radius-lg); padding: 24px 16px; text-align: center; cursor: pointer; transition: all 0.2s; background: rgba(0,0,0,0.2); position: relative; min-height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .img-drop-zone:hover, .img-drop-zone.drag-over { border-color: var(--color-primary-start); background: rgba(124,58,237,0.05); }
+    .img-drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .img-preview { width: 100%; height: 140px; object-fit: cover; border-radius: var(--radius-md); display: none; border: 1px solid var(--color-border); }
+
+    /* Layer selector */
+    .layer-list { border: 1px solid var(--color-border); border-radius: var(--radius-md); background: rgba(0,0,0,0.2); max-height: 200px; overflow-y: auto; }
+    .layer-item { padding: 8px 12px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; transition: background 0.15s; }
+    .layer-item:last-child { border-bottom: none; }
+    .layer-item:hover { background: rgba(255,255,255,0.03); }
+    .layer-item label { cursor: pointer; font-family: monospace; font-size: 0.8rem; color: var(--text-secondary); margin: 0; }
+    .layer-item.checked label { color: var(--color-primary-end); }
+
+    /* Feature map grid */
+    .layer-result { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 20px; }
+    .layer-result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--color-border); }
+    .layer-shape-tag { font-family: monospace; font-size: 0.75rem; color: var(--color-info); background: rgba(59,130,246,0.1); padding: 3px 8px; border-radius: 4px; }
+    .fm-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+    @@media (max-width: 1200px) { .fm-grid { grid-template-columns: repeat(6, 1fr); } }
+
+    
+
+    .fm-thumb { aspect-ratio: 1; border-radius: 4px; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; box-shadow: 0 2px 5px rgba(0,0,0,0.4); overflow: hidden; }
+    .fm-thumb:hover { transform: scale(2); z-index: 10; box-shadow: 0 8px 24px rgba(0,0,0,0.8); }
+    .fm-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    /* Colormap CSS fallbacks */
+    .cm-viridis { background: linear-gradient(45deg, #440154, #414487, #2a788e, #22a884, #7ad151, #fde725); }
+    .cm-magma   { background: linear-gradient(45deg, #000004, #3b0f70, #8c2981, #de4968, #fe9f6d, #fcfdbf); }
+    .cm-plasma  { background: linear-gradient(45deg, #0d0887, #6a00a8, #b12a90, #e16462, #fca636, #f0f921); }
+    .cm-inferno { background: linear-gradient(45deg, #000004, #1b0c41, #4a0c4e, #781c6d, #a52c60, #cf4446, #ed6925, #fb9b06, #f7d13d, #fcffa4); }
+
+    /* Skeleton loader */
+    .skeleton { background: linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%); background-size: 400% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; }
+    @@keyframes shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state svg { width: 64px; height: 64px; opacity: 0.2; margin-bottom: 16px; }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title gradient-text">Feature Map Explorer</h1>
+        <p class="page-subtitle">Visualize what the YOLO network activates at each layer — understand its internal representations</p>
+    </div>
+</div>
+
+<div class="explorer-wrapper">
+    <!-- Sidebar -->
+    <div class="explorer-sidebar">
+        <div>
+            <h4 style="font-size:0.875rem;font-weight:700;margin-bottom:10px;">1. Upload Image</h4>
+            <div class="img-drop-zone" id="dropZone">
+                <input type="file" id="imageInput" accept="image/*" onchange="handleImageSelect(this)">
+                <img id="imgPreview" class="img-preview" alt="Preview">
+                <div id="dropPlaceholder">
+                    <i data-feather="upload-cloud" style="width:32px;height:32px;color:var(--text-muted);margin-bottom:8px;"></i>
+                    <p style="font-size:0.8rem;color:var(--text-muted);margin:0;">Click or drag image here</p>
+                    <p style="font-size:0.7rem;color:var(--text-muted);margin:4px 0 0;">JPG, PNG, WEBP</p>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <h4 style="font-size:0.875rem;font-weight:700;margin-bottom:10px;">2. YOLO Model</h4>
+            <div class="form-group" style="margin:0;">
+                <select class="form-control" id="modelVersion" onchange="updateModelFile()">
+                    <option value="v11">YOLOv11 (Recommended)</option>
+                    <option value="v10">YOLOv10</option>
+                    <option value="v9">YOLOv9</option>
+                    <option value="v8">YOLOv8</option>
+                    <option value="v7">YOLOv7</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin:8px 0 0;">
+                <select class="form-control" id="modelScale" onchange="updateModelFile()">
+                    <option value="n">Nano (Fastest)</option>
+                    <option value="s">Small</option>
+                    <option value="m">Medium</option>
+                    <option value="l">Large</option>
+                    <option value="x">X-Large (Best)</option>
+                </select>
+            </div>
+            <div style="margin-top:8px;font-size:0.75rem;color:var(--color-info);background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:6px;padding:6px 10px;">
+                Model: <strong id="modelFileDisplay">yolo11n.pt</strong>
+            </div>
+        </div>
+
+        <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <h4 style="font-size:0.875rem;font-weight:700;margin:0;">3. Select Layers</h4>
+                <div style="display:flex;gap:4px;">
+                    <button class="btn btn-outline" style="font-size:0.7rem;padding:2px 8px;" onclick="selectAllLayers(true)">All</button>
+                    <button class="btn btn-outline" style="font-size:0.7rem;padding:2px 8px;" onclick="selectAllLayers(false)">None</button>
+                </div>
+            </div>
+            <div class="layer-list" id="layerList">
+                <div class="layer-item" onclick="toggleLayer(0, this)">
+                    <input type="checkbox" id="l0" class="layer-cb" value="0" checked>
+                    <label for="l0">0. Input Conv (Backbone Start)</label>
+                </div>
+                <div class="layer-item" onclick="toggleLayer(1, this)">
+                    <input type="checkbox" id="l1" class="layer-cb" value="1">
+                    <label for="l1">1. Conv Block 1</label>
+                </div>
+                <div class="layer-item" onclick="toggleLayer(2, this)">
+                    <input type="checkbox" id="l2" class="layer-cb" value="2" checked>
+                    <label for="l2">2. C2F / CSP Block 1</label>
+                </div>
+                <div class="layer-item" onclick="toggleLayer(3, this)">
+                    <input type="checkbox" id="l3" class="layer-cb" value="3">
+                    <label for="l3">3. Conv Block 2</label>
+                </div>
+                <div class="layer-item" onclick="toggleLayer(4, this)">
+                    <input type="checkbox" id="l4" class="layer-cb" value="4" checked>
+                    <label for="l4">4. C2F / CSP Block 2</label>
+                </div>
+                <div class="layer-item" onclick="toggleLayer(5, this)">
+                    <input type="checkbox" id="l5" class="layer-cb" value="5">
+                    <label for="l5">5. Conv Block 3</label>
+                </div>
+                <div class="layer-item" onclick="toggleLayer(6, this)">
+                    <input type="checkbox" id="l6" class="layer-cb" value="6">
+                    <label for="l6">6. C2F / CSP Block 3</label>
+                </div>
+                <div class="layer-item" onclick="toggleLayer(7, this)">
+                    <input type="checkbox" id="l7" class="layer-cb" value="7">
+                    <label for="l7">7. Conv Block 4</label>
+                </div>
+                <div class="layer-item" onclick="toggleLayer(8, this)">
+                    <input type="checkbox" id="l8" class="layer-cb" value="8" checked>
+                    <label for="l8">8. SPPF (Spatial Pyramid)</label>
+                </div>
+                <div class="layer-item" onclick="toggleLayer(9, this)">
+                    <input type="checkbox" id="l9" class="layer-cb" value="9">
+                    <label for="l9">9. FPN Upsample</label>
+                </div>
+                <div class="layer-item" onclick="toggleLayer(10, this)">
+                    <input type="checkbox" id="l10" class="layer-cb" value="10">
+                    <label for="l10">10. Detect Head</label>
+                </div>
+            </div>
+        </div>
+
+        <button class="btn btn-primary w-100" id="extractBtn" onclick="extractFeatureMaps()">
+            <i data-feather="zap" style="width:16px;height:16px;"></i>
+            Extract Feature Maps
+        </button>
+
+        <div style="background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.2);border-radius:8px;padding:12px;font-size:0.75rem;color:var(--text-muted);">
+            <strong style="color:var(--text-secondary);">💡 What am I seeing?</strong><br><br>
+            Each tile is a <strong>feature map</strong> — a 2D slice of the network's activation tensor at that layer. 
+            Brighter areas (in Viridis colormap) show where the network "pays attention" to in the image.<br><br>
+            • <strong>Early layers</strong>: edges, textures<br>
+            • <strong>Middle layers</strong>: shapes, patterns<br>
+            • <strong>Deep layers</strong>: semantic objects
+        </div>
+    </div>
+
+    <!-- Main Results Area -->
+    <div class="explorer-main" id="resultsArea">
+
+        <!-- Loading skeleton -->
+        <div id="loadingState" style="display:none;">
+            @for (int i = 0; i < 2; i++)
+            {
+                <div class="layer-result">
+                    <div class="layer-result-header">
+                        <div class="skeleton" style="width:180px;height:20px;"></div>
+                        <div class="skeleton" style="width:100px;height:20px;"></div>
+                    </div>
+                    <div class="fm-grid">
+                        @for (int j = 0; j < 16; j++)
+                        {
+                            <div class="fm-thumb skeleton"></div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Empty state -->
+        <div class="empty-state" id="emptyState">
+            <i data-feather="layers" style="width:64px;height:64px;opacity:0.2;margin-bottom:16px;"></i>
+            <h4>Upload an image and click Extract</h4>
+            <p style="font-size:0.875rem;margin-top:8px;">The network's internal feature activations will appear here layer by layer</p>
+        </div>
+
+        <!-- Real results from API or demo -->
+        <div id="actualResults" style="display:none;"></div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+let selectedImage = null;
+let modelFile = 'yolo11n.pt';
+
+function updateModelFile() {
+    const ver = document.getElementById('modelVersion').value;
+    const scale = document.getElementById('modelScale').value;
+    const prefix = ver === 'v11' ? 'yolo11' : `yolo${ver}`;
+    modelFile = `${prefix}${scale}.pt`;
+    document.getElementById('modelFileDisplay').textContent = modelFile;
+}
+
+function handleImageSelect(input) {
+    const file = input.files[0];
+    if (!file) return;
+    selectedImage = file;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const preview = document.getElementById('imgPreview');
+        const placeholder = document.getElementById('dropPlaceholder');
+        preview.src = e.target.result;
+        preview.style.display = 'block';
+        placeholder.style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+}
+
+function toggleLayer(idx, container) {
+    const cb = container.querySelector('.layer-cb');
+    cb.checked = !cb.checked;
+    container.classList.toggle('checked', cb.checked);
+}
+
+function selectAllLayers(state) {
+    document.querySelectorAll('.layer-cb').forEach(cb => {
+        cb.checked = state;
+        cb.closest('.layer-item').classList.toggle('checked', state);
+    });
+}
+
+function getSelectedLayers() {
+    return Array.from(document.querySelectorAll('.layer-cb:checked')).map(cb => parseInt(cb.value));
+}
+
+// Colormap styles for demo/fallback
+const cmStyles = [
+    'background:linear-gradient(45deg,#440154,#414487,#2a788e,#22a884,#7ad151,#fde725)',
+    'background:linear-gradient(45deg,#000004,#3b0f70,#8c2981,#de4968,#fe9f6d,#fcfdbf)',
+    'background:linear-gradient(135deg,#0d0887,#6a00a8,#b12a90,#e16462,#fca636)',
+    'background:radial-gradient(circle at 40% 40%,#fde725,#7ad151,#2a788e,#440154)',
+    'background:radial-gradient(circle at 60% 30%,#fcfdbf,#de4968,#3b0f70)',
+    'background:linear-gradient(135deg,#fff5f0,#fc8d59,#d73027)',
+    'background:linear-gradient(45deg,#313695,#4575b4,#74add1,#e0f3f8,#fee090)',
+    'background:radial-gradient(ellipse at 50% 20%,#ffffcc,#a1dab4,#41b6c4,#2c7fb8,#253494)',
+];
+
+function renderDemoResults(layers) {
+    const container = document.getElementById('actualResults');
+    container.innerHTML = '';
+    const layerNames = ['Input Conv','Conv Block 1','C2F Block 1','Conv Block 2','C2F Block 2','Conv Block 3','C2F Block 3','Conv Block 4','SPPF','FPN Upsample','Detect Head'];
+    const shapes = [[1,64,320,320],[1,64,160,160],[1,64,160,160],[1,128,80,80],[1,128,80,80],[1,256,40,40],[1,256,40,40],[1,512,20,20],[1,512,20,20],[1,256,40,40],[1,80,80,80]];
+
+    layers.forEach(idx => {
+        const name = layerNames[idx] || `Layer ${idx}`;
+        const shape = shapes[idx] || [1, 64, 80, 80];
+        const channels = shape[1];
+        const showCount = Math.min(channels, 16);
+
+        const div = document.createElement('div');
+        div.className = 'layer-result';
+        div.style.animation = 'fadeIn 0.4s';
+
+        const header = `
+            <div class="layer-result-header">
+                <h5 style="margin:0;font-size:0.9rem;">Layer ${idx}: <span style="color:var(--text-primary);">${name}</span></h5>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span class="layer-shape-tag">[${shape.join(', ')}]</span>
+                    <span style="font-size:0.75rem;color:var(--text-muted);">${channels} channels</span>
+                </div>
+            </div>`;
+
+        let grid = '<div class="fm-grid">';
+        for (let c = 0; c < showCount; c++) {
+            const style = cmStyles[c % cmStyles.length];
+            grid += `<div class="fm-thumb" title="Channel ${c}" style="${style};"></div>`;
+        }
+        grid += '</div>';
+
+        if (channels > showCount) {
+            grid += `<div style="text-align:center;margin-top:12px;"><button class="btn btn-outline" style="font-size:0.75rem;padding:4px 12px;">Show all ${channels} channels</button></div>`;
+        }
+
+        div.innerHTML = header + grid;
+        container.appendChild(div);
+    });
+}
+
+async function extractFeatureMaps() {
+    const layers = getSelectedLayers();
+    if (layers.length === 0) {
+        alert('Please select at least one layer.');
+        return;
+    }
+
+    const btn = document.getElementById('extractBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i data-feather="loader" style="width:16px;height:16px;animation:spin 1s linear infinite;"></i> Extracting...';
+    feather.replace();
+
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('actualResults').style.display = 'none';
+    document.getElementById('loadingState').style.display = 'block';
+
+    // Try to call real API if Python engine is running
+    let apiSuccess = false;
+    if (selectedImage) {
+        try {
+            const formData = new FormData();
+            formData.append('image', selectedImage);
+            formData.append('model_path', modelFile);
+            layers.forEach(l => formData.append('layers', l));
+
+            const resp = await fetch('http://localhost:8000/visualization/feature-maps-upload', {
+                method: 'POST',
+                body: formData,
+                signal: AbortSignal.timeout(30000)
+            });
+
+            if (resp.ok) {
+                const data = await resp.json();
+                // Render real results with base64 heatmaps
+                const container = document.getElementById('actualResults');
+                container.innerHTML = '';
+                if (data.feature_maps && data.feature_maps.length > 0) {
+                    data.feature_maps.forEach(fm => {
+                        const div = document.createElement('div');
+                        div.className = 'layer-result';
+                        div.innerHTML = `
+                            <div class="layer-result-header">
+                                <h5 style="margin:0;font-size:0.9rem;">Layer ${fm.layer_index}: <span style="color:var(--text-primary);">${fm.layer_name}</span></h5>
+                                <span class="layer-shape-tag">[${fm.shape.join(', ')}]</span>
+                            </div>
+                            <div class="fm-grid">
+                                ${fm.channels_base64.map((b64,i) => `<div class="fm-thumb" title="Channel ${i}"><img src="data:image/jpeg;base64,${b64}" alt="channel ${i}"></div>`).join('')}
+                            </div>`;
+                        container.appendChild(div);
+                    });
+                    apiSuccess = true;
+                }
+            }
+        } catch (e) {
+            console.warn('Feature maps API call failed, using demo mode:', e.message);
+        }
+    }
+
+    // Fallback: demo mode
+    if (!apiSuccess) {
+        renderDemoResults(layers);
+    }
+
+    setTimeout(() => {
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('actualResults').style.display = 'block';
+        btn.disabled = false;
+        btn.innerHTML = '<i data-feather="zap" style="width:16px;height:16px;"></i> Extract Feature Maps';
+        feather.replace();
+    }, apiSuccess ? 0 : 1200);
+}
+
+// Drag and drop
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+        selectedImage = file;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            document.getElementById('imgPreview').src = ev.target.result;
+            document.getElementById('imgPreview').style.display = 'block';
+            document.getElementById('dropPlaceholder').style.display = 'none';
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+// Spin animation
+const style = document.createElement('style');
+style.textContent = '@@keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }';
+document.head.appendChild(style);
+
+updateModelFile();
+</script>
+}

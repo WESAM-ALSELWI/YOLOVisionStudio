@@ -1,0 +1,17 @@
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+psutil>=5.9.0
+numpy>=1.24.0
+pydantic>=2.0.0
+pyyaml>=6.0
+# Optional GPU monitoring (comment out if it causes issues on systems without NVIDIA)
+pynvml>=11.5.0
+
+# These are assumed to be in the AmalAI environment already:
+# ultralytics
+# opencv-python
+# torch
+# torchvision
+# tensorboard
+# onnxruntime

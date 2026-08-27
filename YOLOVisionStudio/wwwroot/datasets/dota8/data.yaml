@@ -1,0 +1,20 @@
+path: C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/wwwroot/datasets/dota8
+train: images/train
+val: images/val
+nc: 15
+names:
+  - class_0
+  - class_1
+  - class_2
+  - class_3
+  - class_4
+  - class_5
+  - class_6
+  - class_7
+  - class_8
+  - class_9
+  - class_10
+  - class_11
+  - class_12
+  - class_13
+  - class_14

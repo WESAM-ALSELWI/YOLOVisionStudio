@@ -1,0 +1,5 @@
+path: C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/wwwroot/uploads/datasets/helmet
+train: images/train
+val: images/val
+nc: 2
+names: ["Helmet", "No-Helmet"]

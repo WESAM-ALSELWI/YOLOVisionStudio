@@ -1,0 +1,7 @@
+names:
+- class_0
+nc: 1
+path: C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/wwwroot/datasets/coco128
+test: images/test
+train: images/train
+val: images/val

@@ -1,0 +1,144 @@
+@model YOLOVisionStudio.Models.ViewModels.SplitDatasetViewModel
+@{
+    ViewData["Title"] = "Split Dataset";
+    var ds = Model.Dataset;
+}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title gradient-text">✂ Split Dataset</h1>
+        <p class="page-subtitle">Build the YOLO folder structure (images/train · images/val · images/test) from @ds.Name</p>
+    </div>
+    <a href="@Url.Action(Model.ReturnTo == "wizard" ? "Wizard" : "Index", Model.ReturnTo == "wizard" ? "Training" : "Dataset", new { projectId = ds.ProjectId })" class="btn btn-secondary">← Back</a>
+</div>
+
+@if (TempData["SplitError"] != null)
+{
+    <div class="card mb-4" style="background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.35);color:var(--color-error);padding:1rem 1.25rem;">
+        ⚠️ @TempData["SplitError"]
+    </div>
+}
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="card mb-4" style="background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.3);color:var(--color-success);padding:1rem 1.25rem;">
+        ⚡ @TempData["SuccessMessage"]
+    </div>
+}
+
+<div class="grid grid-cols-2 gap-3">
+    <div class="glass-card" style="padding:22px;">
+        <h3 style="margin:0 0 14px;">Dataset status</h3>
+        <div class="meta-row" style="padding:8px 0;">
+            <span style="color:var(--text-muted);">Name</span><b>@ds.Name</b>
+        </div>
+        <div class="meta-row" style="padding:8px 0;">
+            <span style="color:var(--text-muted);">Location</span>
+            <b style="font-family:monospace;font-size:0.68rem;word-break:break-all;text-align:right;">@ds.StoragePath</b>
+        </div>
+        <div class="meta-row" style="padding:8px 0;">
+            <span style="color:var(--text-muted);">YOLO structure</span>
+            @if (Model.IsYoloStructured)
+            {
+                <b style="color:var(--color-success);">✓ Already split — you can re-split if needed</b>
+            }
+            else
+            {
+                <b style="color:var(--color-warning);">⚠ Not preprocessed — needs splitting before training</b>
+            }
+        </div>
+        <div class="meta-row" style="padding:8px 0;">
+            <span style="color:var(--text-muted);">Images found</span>
+            <b>@Model.DetectedImages</b>
+        </div>
+        <div style="margin-top:14px;padding:12px;border-radius:var(--radius-md);background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.25);font-size:0.75rem;color:var(--text-secondary);line-height:1.6;">
+            YOLO training requires this structure:<br>
+            <code style="color:var(--color-primary-end);">
+                📁 dataset/<br>
+                &nbsp;&nbsp;├── 📁 images/train &nbsp;📁 images/val &nbsp;📁 images/test<br>
+                &nbsp;&nbsp;├── 📁 labels/train &nbsp;📁 labels/val &nbsp;📁 labels/test<br>
+                &nbsp;&nbsp;└── 📄 data.yaml
+            </code><br>
+            Splitting <b>copies</b> your images into this structure — originals are never modified.
+        </div>
+    </div>
+
+    <div class="glass-card" style="padding:22px;">
+        <h3 style="margin:0 0 14px;">Choose your split</h3>
+        <form asp-action="SplitDataset" asp-controller="Dataset" method="post" id="splitForm">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@ds.Id" />
+            <input type="hidden" name="name" value="@ds.Name" />
+            <input type="hidden" name="projectId" value="@(ds.Id > 0 ? ds.ProjectId : ViewBag.ProjectId ?? 1)" />
+            <input type="hidden" name="returnTo" value="@Model.ReturnTo" />
+
+            <div class="grid grid-cols-3 gap-2">
+                <div class="form-group">
+                    <label class="form-label" title="Images the model learns from.">Train %</label>
+                    <input type="number" class="form-control split-pct" name="trainPct" id="trainPct" value="70" min="0" max="100" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label" title="Held-out images used during training to monitor generalization.">Val %</label>
+                    <input type="number" class="form-control split-pct" name="valPct" id="valPct" value="15" min="0" max="100" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label" title="Final untouched images used to evaluate the finished model.">Test %</label>
+                    <input type="number" class="form-control split-pct" name="testPct" id="testPct" value="15" min="0" max="100" />
+                </div>
+            </div>
+
+            <div id="splitSummary" style="margin:16px 0;padding:14px;border-radius:var(--radius-md);background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.25);">
+                <div style="display:flex;height:18px;border-radius:6px;overflow:hidden;border:1px solid var(--color-border);" id="ratioBar">
+                    <div style="width:70%;background:var(--color-primary-start);"></div>
+                    <div style="width:15%;background:var(--color-primary-end);"></div>
+                    <div style="width:15%;background:var(--color-success);"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:0.75rem;color:var(--text-secondary);">
+                    <span id="sumTrain">Train: 70% (~0 imgs)</span>
+                    <span id="sumVal">Val: 15% (~0 imgs)</span>
+                    <span id="sumTest">Test: 15% (~0 imgs)</span>
+                </div>
+                <div id="sumError" style="margin-top:8px;font-size:0.75rem;color:var(--color-error);display:none;">⚠️ Percentages must total exactly 100%</div>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100" id="splitBtn" style="padding:13px;font-size:1rem;font-weight:700;">
+                ✂ Split & Build YOLO Structure
+            </button>
+            <p style="font-size:0.7rem;color:var(--text-muted);margin-top:8px;text-align:center;">
+                Images are shuffled randomly, then copied into train / val / test folders with a data.yaml.
+            </p>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+const total = @Model.DetectedImages;
+const inputs = ['trainPct','valPct','testPct'].map(id => document.getElementById(id));
+const colors = ['var(--color-primary-start)','var(--color-primary-end)','var(--color-success)'];
+
+function refresh() {
+    const [t, v, te] = inputs.map(i => parseInt(i.value, 10) || 0);
+    const sum = t + v + te;
+    const ok = sum === 100;
+    document.getElementById('sumError').style.display = ok ? 'none' : 'block';
+    document.getElementById('splitBtn').disabled = !ok;
+    document.getElementById('splitBtn').style.opacity = ok ? '1' : '.5';
+
+    const bar = document.getElementById('ratioBar');
+    bar.children[0].style.width = t + '%';
+    bar.children[1].style.width = v + '%';
+    bar.children[2].style.width = te + '%';
+    document.getElementById('sumTrain').textContent = `Train: ${t}% (~${Math.round(total * t / 100)} imgs)`;
+    document.getElementById('sumVal').textContent = `Val: ${v}% (~${Math.round(total * v / 100)} imgs)`;
+    document.getElementById('sumTest').textContent = `Test: ${te}% (~${total - Math.round(total*t/100) - Math.round(total*v/100)} imgs)`;
+}
+inputs.forEach(i => i.addEventListener('input', refresh));
+refresh();
+
+document.getElementById('splitForm').addEventListener('submit', () => {
+    const btn = document.getElementById('splitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Splitting & copying files...';
+});
+</script>
+}

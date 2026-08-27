@@ -1,0 +1,247 @@
+@{
+    ViewData["Title"] = "Experiment Tracking";
+}
+
+<style>
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 25px; }
+    .stat-card { background: var(--color-card); border-radius: var(--radius-lg); padding: 20px; border: 1px solid var(--color-border); display: flex; align-items: center; }
+    .stat-icon { width: 50px; height: 50px; border-radius: 12px; background: rgba(124, 58, 237, 0.1); color: var(--color-primary-start); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-right: 15px; }
+    
+    .exp-table { width: 100%; border-collapse: collapse; background: var(--color-card); border-radius: var(--radius-lg); border: 1px solid var(--color-border); }
+    .exp-table th { padding: 15px; text-align: left; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; border-bottom: 1px solid var(--color-border); }
+    .exp-table td { padding: 15px; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+    .exp-table tr.main-row:hover { background: rgba(255,255,255,0.02); cursor: pointer; }
+    
+    .sub-table-container { display: none; padding: 20px; background: #0a0c10; border-bottom: 1px solid var(--color-border); }
+    .sub-table-container.open { display: table-cell; }
+    .sub-table { width: 100%; border-left: 3px solid var(--color-primary-start); background: rgba(255,255,255,0.02); }
+    .sub-table th { padding: 8px 15px; font-size: 0.75rem; border-bottom: 1px solid #1f2937; }
+    .sub-table td { padding: 8px 15px; border-bottom: 1px solid #1f2937; font-size: 0.9rem; }
+    
+    .tag-chip { display: inline-block; padding: 3px 10px; border-radius: 15px; background: rgba(59, 130, 246, 0.1); color: var(--color-info); font-size: 0.75rem; border: 1px solid rgba(59, 130, 246, 0.2); margin-right: 5px; }
+    
+    .filter-chips { display: flex; gap: 10px; margin-bottom: 20px; }
+    .filter-chip { padding: 6px 15px; border-radius: 20px; border: 1px solid var(--color-border); background: var(--color-card); color: var(--text-muted); cursor: pointer; font-size: 0.85rem; transition: all 0.2s; }
+    .filter-chip:hover { border-color: var(--color-primary-start); color: var(--text-primary); }
+    .filter-chip.active { background: var(--color-primary-start); color: white; border-color: var(--color-primary-start); }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="page-title m-0">Experiment Tracking</h1>
+        <p class="page-subtitle m-0">Compare and manage training runs</p>
+    </div>
+    <div>
+        <button class="btn btn-outline mr-2"><i class="fas fa-file-csv mr-2"></i> Export CSV</button>
+        <button class="btn btn-primary"><i class="fas fa-plus mr-2"></i> New Experiment</button>
+    </div>
+</div>
+
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="stat-icon"><i class="fas fa-flask"></i></div>
+        <div>
+            <h3 class="m-0 text-white">5</h3>
+            <span class="text-muted small text-uppercase">Total Experiments</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon bg-success" style="background: rgba(16, 185, 129, 0.1); color: #10b981;"><i class="fas fa-trophy"></i></div>
+        <div>
+            <h3 class="m-0 text-white">94.2%</h3>
+            <span class="text-muted small text-uppercase">Best mAP50</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon bg-warning" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;"><i class="fas fa-clock"></i></div>
+        <div>
+            <h3 class="m-0 text-white">47h</h3>
+            <span class="text-muted small text-uppercase">Total Training Time</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon bg-info" style="background: rgba(6, 182, 212, 0.1); color: #06b6d4;"><i class="fas fa-cubes"></i></div>
+        <div>
+            <h3 class="m-0 text-white">12</h3>
+            <span class="text-muted small text-uppercase">Models Generated</span>
+        </div>
+    </div>
+</div>
+
+<div class="filter-chips">
+    <div class="filter-chip active">All</div>
+    <div class="filter-chip">Baseline</div>
+    <div class="filter-chip">Augmentation Search</div>
+    <div class="filter-chip">Architecture Search</div>
+    <div class="filter-chip">Hyperparameter Tuning</div>
+</div>
+
+<table class="exp-table">
+    <thead>
+        <tr>
+            <th style="width: 40px;"></th>
+            <th>Experiment Name</th>
+            <th>Status</th>
+            <th>Runs</th>
+            <th>Best mAP50</th>
+            <th>Tags</th>
+            <th>Created</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- Exp 1 -->
+        <tr class="main-row" onclick="toggleExp(1)">
+            <td class="text-center"><i class="fas fa-chevron-right text-muted" id="icon-exp-1"></i></td>
+            <td class="font-weight-bold">Helmet Detection v2</td>
+            <td><span class="badge badge-success">Completed</span></td>
+            <td>4</td>
+            <td class="text-success font-weight-bold">89.4%</td>
+            <td>
+                <span class="tag-chip">production</span>
+                <span class="tag-chip">yolov8</span>
+            </td>
+            <td class="text-muted">Aug 1, 2026</td>
+            <td>
+                <button class="btn btn-sm btn-outline py-1" onclick="event.stopPropagation(); window.location.href='/Experiment/Detail'">View Details</button>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="8" class="p-0">
+                <div class="sub-table-container" id="sub-1">
+                    <table class="sub-table">
+                        <thead>
+                            <tr>
+                                <th>Run Name</th>
+                                <th>Model</th>
+                                <th>Epochs</th>
+                                <th>mAP50</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Run-4-Final</td>
+                                <td>YOLOv8m</td>
+                                <td>300</td>
+                                <td class="text-success">89.4%</td>
+                                <td>Aug 5, 2026</td>
+                            </tr>
+                            <tr>
+                                <td>Run-3-Augmented</td>
+                                <td>YOLOv8m</td>
+                                <td>200</td>
+                                <td>86.1%</td>
+                                <td>Aug 4, 2026</td>
+                            </tr>
+                            <tr>
+                                <td>Run-2-Baseline</td>
+                                <td>YOLOv8s</td>
+                                <td>150</td>
+                                <td>82.4%</td>
+                                <td>Aug 2, 2026</td>
+                            </tr>
+                            <tr>
+                                <td>Run-1-Test</td>
+                                <td>YOLOv8n</td>
+                                <td>50</td>
+                                <td>65.2%</td>
+                                <td>Aug 1, 2026</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </td>
+        </tr>
+
+        <!-- Exp 2 -->
+        <tr class="main-row" onclick="toggleExp(2)">
+            <td class="text-center"><i class="fas fa-chevron-right text-muted" id="icon-exp-2"></i></td>
+            <td class="font-weight-bold">Architecture Search - Tiny</td>
+            <td><span class="badge badge-primary">Running</span></td>
+            <td>3</td>
+            <td>74.5%</td>
+            <td>
+                <span class="tag-chip" style="color:#f59e0b; background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.2);">research</span>
+                <span class="tag-chip">edge-deploy</span>
+            </td>
+            <td class="text-muted">Aug 7, 2026</td>
+            <td>
+                <button class="btn btn-sm btn-outline py-1" onclick="event.stopPropagation();">View Details</button>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="8" class="p-0">
+                <div class="sub-table-container" id="sub-2">
+                    <table class="sub-table">
+                        <thead>
+                            <tr>
+                                <th>Run Name</th>
+                                <th>Model</th>
+                                <th>Epochs</th>
+                                <th>mAP50</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>YOLOv8n-Custom</td>
+                                <td>YOLOv8n</td>
+                                <td>145/300</td>
+                                <td>--</td>
+                                <td><span class="text-primary"><i class="fas fa-spinner fa-spin"></i> Running</span></td>
+                            </tr>
+                            <tr>
+                                <td>YOLOv7-Tiny</td>
+                                <td>YOLOv7t</td>
+                                <td>300</td>
+                                <td>74.5%</td>
+                                <td><span class="text-success">Completed</span></td>
+                            </tr>
+                            <tr>
+                                <td>YOLOv5-Nano</td>
+                                <td>YOLOv5n</td>
+                                <td>300</td>
+                                <td>71.2%</td>
+                                <td><span class="text-success">Completed</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </td>
+        </tr>
+        
+        <!-- Exp 3 -->
+        <tr class="main-row">
+            <td class="text-center"><i class="fas fa-chevron-right text-muted"></i></td>
+            <td class="font-weight-bold">Dataset Size Impact Study</td>
+            <td><span class="badge badge-success">Completed</span></td>
+            <td>5</td>
+            <td>81.2%</td>
+            <td>
+                <span class="tag-chip">data-centric</span>
+            </td>
+            <td class="text-muted">Jul 20, 2026</td>
+            <td>
+                <button class="btn btn-sm btn-outline py-1">View Details</button>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+@section Scripts {
+    <script>
+        function toggleExp(id) {
+            let sub = document.getElementById('sub-' + id);
+            let icon = document.getElementById('icon-exp-' + id);
+            
+            if (sub.classList.contains('open')) {
+                sub.classList.remove('open');
+                icon.className = 'fas fa-chevron-right text-muted';
+            } else {
+                sub.classList.add('open');
+                icon.className = 'fas fa-chevron-down text-primary';
+            }
+        }
+    </script>
+}

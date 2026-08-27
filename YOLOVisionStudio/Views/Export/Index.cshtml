@@ -1,0 +1,325 @@
+@{
+    ViewData["Title"] = "Model Export";
+}
+
+<style>
+    .export-layout { display: flex; gap: 20px; }
+    .main-area { flex-grow: 1; }
+    .settings-panel { width: 320px; background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 20px; flex-shrink: 0; }
+    
+    .format-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 30px; }
+    .format-card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 20px; transition: all 0.2s; position: relative; overflow: hidden; }
+    .format-card:hover { border-color: var(--color-primary-start); transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+    
+    .format-icon { font-size: 2.5rem; margin-bottom: 15px; }
+    .card-onnx { border-top: 3px solid #f97316; }
+    .card-trt { border-top: 3px solid #22c55e; }
+    .card-vino { border-top: 3px solid #3b82f6; }
+    .card-torch { border-top: 3px solid #ef4444; }
+    .card-core { border-top: 3px solid #94a3b8; }
+    .card-int8 { border-top: 3px solid #a855f7; }
+    
+    .export-table { width: 100%; border-collapse: collapse; }
+    .export-table th, .export-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--color-border); }
+    .export-table th { color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; }
+    
+    .accordion-btn { width: 100%; text-align: left; background: #0a0c10; border: 1px solid var(--color-border); color: var(--text-primary); padding: 15px; border-radius: 6px; margin-bottom: 5px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .accordion-content { display: none; padding: 15px; background: #0d1117; border: 1px solid var(--color-border); border-top: none; border-radius: 0 0 6px 6px; margin-top: -6px; margin-bottom: 10px; }
+    .accordion-content.active { display: block; }
+    
+    .code-snippet { background: #000; border: 1px solid #30363d; border-radius: 6px; padding: 15px; font-family: monospace; color: #c9d1d9; overflow-x: auto; }
+</style>
+
+<div class="page-header">
+    <h1 class="page-title">Model Export</h1>
+    <p class="page-subtitle">Convert trained weights for deployment</p>
+</div>
+
+<div class="d-flex align-items-center mb-4 p-3 rounded" style="background: var(--color-card); border: 1px solid var(--color-border);">
+    <h5 class="m-0 mr-3 text-muted">Select Model:</h5>
+    <select class="form-control bg-dark text-white border-secondary mr-3" style="max-width: 400px;">
+        <option>Helmet Detection v2 / Run-4-Final (YOLOv8m)</option>
+        <option>Helmet Detection v2 / Run-2-Baseline (YOLOv8s)</option>
+        <option>Architecture Search / YOLOv7-Tiny</option>
+    </select>
+    <button class="btn btn-outline">Load</button>
+</div>
+
+<div class="export-layout">
+    <div class="main-area">
+        <h4 class="mb-3">Export Formats</h4>
+        <div class="format-grid">
+            <!-- ONNX -->
+            <div class="format-card card-onnx">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="format-icon text-warning"><i class="fas fa-project-diagram"></i></div>
+                    <span class="badge badge-dark border border-warning text-warning">Cross-Platform</span>
+                </div>
+                <h5>ONNX</h5>
+                <p class="text-muted small">Standard format for cross-platform deployment. Supported by most inference engines.</p>
+                <button class="btn btn-sm btn-outline w-100" onclick="startExport('ONNX')">Export</button>
+            </div>
+            
+            <!-- TensorRT -->
+            <div class="format-card card-trt">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="format-icon text-success"><i class="fas fa-microchip"></i></div>
+                    <span class="badge badge-dark border border-success text-success">NVIDIA GPU</span>
+                </div>
+                <h5>TensorRT</h5>
+                <p class="text-muted small">Highly optimized for NVIDIA GPUs. Dramatically reduces latency.</p>
+                <button class="btn btn-sm btn-outline w-100" onclick="startExport('TensorRT')">Export</button>
+            </div>
+            
+            <!-- OpenVINO -->
+            <div class="format-card card-vino">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="format-icon text-info"><i class="fas fa-server"></i></div>
+                    <span class="badge badge-dark border border-info text-info">Intel CPU</span>
+                </div>
+                <h5>OpenVINO</h5>
+                <p class="text-muted small">Optimized inference for Intel CPUs and integrated graphics.</p>
+                <button class="btn btn-sm btn-outline w-100" onclick="startExport('OpenVINO')">Export</button>
+            </div>
+            
+            <!-- TorchScript -->
+            <div class="format-card card-torch">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="format-icon text-danger"><i class="fas fa-fire"></i></div>
+                    <span class="badge badge-dark border border-danger text-danger">PyTorch</span>
+                </div>
+                <h5>TorchScript</h5>
+                <p class="text-muted small">Serialize PyTorch models for deployment in C++ environments.</p>
+                <button class="btn btn-sm btn-outline w-100" onclick="startExport('TorchScript')">Export</button>
+            </div>
+            
+            <!-- CoreML -->
+            <div class="format-card card-core">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="format-icon text-secondary"><i class="fab fa-apple"></i></div>
+                    <span class="badge badge-dark border border-secondary text-secondary">Apple</span>
+                </div>
+                <h5>CoreML</h5>
+                <p class="text-muted small">For deployment on iOS, macOS, and Apple Silicon devices.</p>
+                <button class="btn btn-sm btn-outline w-100" onclick="startExport('CoreML')">Export</button>
+            </div>
+            
+            <!-- ONNX INT8 -->
+            <div class="format-card card-int8">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="format-icon" style="color: #a855f7;"><i class="fas fa-compress-arrows-alt"></i></div>
+                    <span class="badge badge-dark border" style="border-color: #a855f7; color: #a855f7;">Quantized</span>
+                </div>
+                <h5>ONNX (INT8)</h5>
+                <p class="text-muted small">Quantized format. Smaller size and faster CPU inference with slight accuracy loss.</p>
+                <button class="btn btn-sm btn-outline w-100" onclick="startExport('ONNX INT8')">Export</button>
+            </div>
+        </div>
+        
+        <h4 class="mb-3 mt-5">Exported Files</h4>
+        <div class="card p-0 overflow-hidden mb-5">
+            <table class="export-table" id="filesTable">
+                <thead>
+                    <tr>
+                        <th>Format</th>
+                        <th>File Name</th>
+                        <th>Date</th>
+                        <th>Size</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-info">ONNX</span></td>
+                        <td>best.onnx</td>
+                        <td>Aug 5, 2026</td>
+                        <td>84.2 MB</td>
+                        <td><button class="btn btn-sm btn-primary py-1"><i class="fas fa-download mr-1"></i> Download</button></td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-danger">TorchScript</span></td>
+                        <td>best.torchscript</td>
+                        <td>Aug 6, 2026</td>
+                        <td>85.1 MB</td>
+                        <td><button class="btn btn-sm btn-primary py-1"><i class="fas fa-download mr-1"></i> Download</button></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <h4 class="mb-3">Deployment Guides</h4>
+        
+        <button class="accordion-btn" onclick="toggleAcc(this)">
+            <span><i class="fab fa-python mr-2"></i> Python Inference (ONNX)</span>
+            <i class="fas fa-chevron-down text-muted"></i>
+        </button>
+        <div class="accordion-content">
+            <div class="code-snippet">
+import onnxruntime as ort
+import numpy as np
+import cv2
+
+# Load model
+session = ort.InferenceSession("best.onnx", providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
+
+# Preprocess image
+img = cv2.imread("test.jpg")
+img = cv2.resize(img, (640, 640))
+img = img.transpose((2, 0, 1))[np.newaxis, :, :, :].astype(np.float32) / 255.0
+
+# Run inference
+inputs = {session.get_inputs()[0].name: img}
+outputs = session.run(None, inputs)
+
+# Process outputs...
+print("Raw shape:", outputs[0].shape)
+            </div>
+        </div>
+        
+        <button class="accordion-btn" onclick="toggleAcc(this)">
+            <span><i class="fas fa-code mr-2"></i> C++ Inference (TensorRT)</span>
+            <i class="fas fa-chevron-down text-muted"></i>
+        </button>
+        <div class="accordion-content">
+            <div class="code-snippet">
+// Requires TensorRT and OpenCV C++ headers
+#include "NvInfer.h"
+#include <opencv2/opencv.hpp>
+
+// Setup builder and network...
+nvinfer1::IBuilder* builder = nvinfer1::createInferBuilder(logger);
+nvinfer1::INetworkDefinition* network = builder->createNetworkV2(0);
+
+// Load engine file...
+// Note: TensorRT engines are hardware specific. 
+// Export ONNX first, then use trtexec on the target device:
+// $ trtexec --onnx=best.onnx --saveEngine=best.engine --fp16
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- Sidebar -->
+    <div class="settings-panel">
+        <h5 class="mb-4">Export Settings</h5>
+        
+        <div class="form-group mb-3">
+            <label>Input Image Size</label>
+            <div class="input-group">
+                <input type="number" class="form-control bg-dark text-white border-secondary" value="640">
+                <div class="input-group-append">
+                    <span class="input-group-text bg-secondary border-secondary text-white">px</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span>Half Precision (FP16)</span>
+            <label class="toggle-switch">
+                <input type="checkbox" checked>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+        <p class="text-muted small mb-4">Reduces model size and increases speed on modern GPUs with minimal accuracy loss.</p>
+        
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span>Dynamic Shapes</span>
+            <label class="toggle-switch">
+                <input type="checkbox">
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+        <p class="text-muted small mb-4">Allows dynamic input batch size and image dimensions. May disable some optimizations.</p>
+        
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span>Include NMS</span>
+            <label class="toggle-switch">
+                <input type="checkbox" checked>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+        <p class="text-muted small">Embed Non-Maximum Suppression directly into the exported graph.</p>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="exportModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center;">
+    <div class="card p-4 text-center" style="width: 400px;">
+        <h4 id="exportTitle">Exporting to ONNX</h4>
+        <div class="my-4">
+            <i class="fas fa-cog fa-spin text-primary" style="font-size: 4rem;"></i>
+        </div>
+        <p class="text-muted" id="exportStatus">Optimizing graph and simplifying operations...</p>
+        <div class="progress" style="height: 10px; background: var(--color-border); border-radius: 5px; overflow: hidden;">
+            <div class="progress-bar bg-primary" id="exportProgress" style="width: 0%; transition: width 0.3s;"></div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function toggleAcc(btn) {
+            let content = btn.nextElementSibling;
+            let icon = btn.querySelector('.fa-chevron-down, .fa-chevron-up');
+            
+            if(content.classList.contains('active')) {
+                content.classList.remove('active');
+                icon.className = 'fas fa-chevron-down text-muted';
+            } else {
+                content.classList.add('active');
+                icon.className = 'fas fa-chevron-up text-primary';
+            }
+        }
+        
+        function startExport(format) {
+            let modal = document.getElementById('exportModal');
+            let title = document.getElementById('exportTitle');
+            let status = document.getElementById('exportStatus');
+            let progress = document.getElementById('exportProgress');
+            
+            title.innerText = `Exporting to ${format}`;
+            status.innerText = "Initializing exporter...";
+            progress.style.width = '0%';
+            modal.style.display = 'flex';
+            
+            let p = 0;
+            let interval = setInterval(() => {
+                p += Math.random() * 15;
+                if(p > 30) status.innerText = "Tracing model graph...";
+                if(p > 60) status.innerText = "Optimizing nodes...";
+                if(p > 90) status.innerText = "Saving file...";
+                
+                if(p >= 100) {
+                    p = 100;
+                    clearInterval(interval);
+                    status.innerText = "Export Complete!";
+                    
+                    setTimeout(() => {
+                        modal.style.display = 'none';
+                        
+                        // Add to table
+                        let ext = format.toLowerCase().replace(' ', '');
+                        if(ext === 'tensorrt') ext = 'engine';
+                        if(ext === 'torchscript') ext = 'torchscript';
+                        if(ext.includes('onnx')) ext = 'onnx';
+                        if(ext === 'openvino') ext = 'xml';
+                        if(ext === 'coreml') ext = 'mlmodel';
+                        
+                        let html = `
+                        <tr class="fade-in">
+                            <td><span class="badge badge-primary">${format}</span></td>
+                            <td>best.${ext}</td>
+                            <td>Just now</td>
+                            <td>${(Math.random() * 50 + 20).toFixed(1)} MB</td>
+                            <td><button class="btn btn-sm btn-primary py-1"><i class="fas fa-download mr-1"></i> Download</button></td>
+                        </tr>`;
+                        
+                        document.getElementById('filesTable').querySelector('tbody').insertAdjacentHTML('afterbegin', html);
+                        
+                    }, 1000);
+                }
+                progress.style.width = p + '%';
+            }, 500);
+        }
+    </script>
+}

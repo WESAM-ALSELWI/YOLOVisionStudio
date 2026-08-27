@@ -1,0 +1,152 @@
+is_global = true
+build_property.TargetFramework = net10.0
+build_property.TargetFramework = net10.0
+build_property.TargetPlatformMinVersion = 
+build_property.TargetPlatformMinVersion = 
+build_property.UsingMicrosoftNETSdkWeb = true
+build_property.UsingMicrosoftNETSdkWeb = true
+build_property.ProjectTypeGuids = 
+build_property.ProjectTypeGuids = 
+build_property.InvariantGlobalization = 
+build_property.InvariantGlobalization = 
+build_property.PlatformNeutralAssembly = 
+build_property.PlatformNeutralAssembly = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property._SupportedPlatformList = Linux,macOS,Windows
+build_property._SupportedPlatformList = Linux,macOS,Windows
+build_property.TargetFrameworkIdentifier = .NETCoreApp
+build_property.TargetFrameworkVersion = v10.0
+build_property.EntryPointFilePath = 
+build_property.RootNamespace = YOLOVisionStudio
+build_property.RootNamespace = YOLOVisionStudio
+build_property.ProjectDir = C:\Users\AMB\source\repos\YOLOVisionStudio\YOLOVisionStudio\
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.RazorLangVersion = 10.0
+build_property.SupportLocalizedComponentNames = 
+build_property.GenerateRazorMetadataSourceChecksumAttributes = 
+build_property.MSBuildProjectDirectory = C:\Users\AMB\source\repos\YOLOVisionStudio\YOLOVisionStudio
+build_property._RazorSourceGeneratorDebug = 
+build_property.EffectiveAnalysisLevelStyle = 10.0
+build_property.EnableCodeStyleSeverity = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Assistant/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQXNzaXN0YW50XEluZGV4LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Comparison/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQ29tcGFyaXNvblxJbmRleC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Dataset/Analyze.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcRGF0YXNldFxBbmFseXplLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Dataset/Augment.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcRGF0YXNldFxBdWdtZW50LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Dataset/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcRGF0YXNldFxJbmRleC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Dataset/Split.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcRGF0YXNldFxTcGxpdC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Dataset/Upload.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcRGF0YXNldFxVcGxvYWQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Experiment/Detail.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcRXhwZXJpbWVudFxEZXRhaWwuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Experiment/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcRXhwZXJpbWVudFxJbmRleC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Export/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcRXhwb3J0XEluZGV4LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Home/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxJbmRleC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Home/Privacy.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxQcml2YWN5LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Inference/Camera.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW5mZXJlbmNlXENhbWVyYS5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Inference/Test.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW5mZXJlbmNlXFRlc3QuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Monitor/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTW9uaXRvclxJbmRleC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Project/Create.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHJvamVjdFxDcmVhdGUuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Project/Detail.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHJvamVjdFxEZXRhaWwuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Project/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHJvamVjdFxJbmRleC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Shared/Error.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXEVycm9yLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Shared/_ValidationScriptsPartial.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9WYWxpZGF0aW9uU2NyaXB0c1BhcnRpYWwuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Training/Configure.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcVHJhaW5pbmdcQ29uZmlndXJlLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Training/History.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcVHJhaW5pbmdcSGlzdG9yeS5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Training/Monitor.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcVHJhaW5pbmdcTW9uaXRvci5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Training/Wizard.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcVHJhaW5pbmdcV2l6YXJkLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Visualization/Architecture.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcVmlzdWFsaXphdGlvblxBcmNoaXRlY3R1cmUuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Visualization/Explainability.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcVmlzdWFsaXphdGlvblxFeHBsYWluYWJpbGl0eS5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Visualization/FeatureMaps.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcVmlzdWFsaXphdGlvblxGZWF0dXJlTWFwcy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/_ViewImports.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcX1ZpZXdJbXBvcnRzLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/_ViewStart.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcX1ZpZXdTdGFydC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AMB/source/repos/YOLOVisionStudio/YOLOVisionStudio/Views/Shared/_Layout.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9MYXlvdXQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = b-5l9ouoampk

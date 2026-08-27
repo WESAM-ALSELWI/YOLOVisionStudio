@@ -1,0 +1,173 @@
+@{
+    ViewData["Title"] = "Augmentation Studio";
+}
+
+<style>
+    .studio-container { display: flex; gap: 20px; height: calc(100vh - 120px); }
+    .sidebar { width: 320px; background: var(--color-card); border-right: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 20px; overflow-y: auto; flex-shrink: 0; }
+    .main-area { flex-grow: 1; display: flex; flex-direction: column; gap: 20px; overflow: hidden; }
+    
+    .control-group { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--color-border); }
+    
+    .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-track { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--color-border); transition: .3s; border-radius: 24px; }
+    .toggle-track:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+    input:checked + .toggle-track { background-color: var(--color-primary-start); }
+    input:checked + .toggle-track:before { transform: translateX(20px); }
+    
+    .range-input { width: 100%; accent-color: var(--color-primary-start); }
+    .val-display { float: right; font-family: monospace; color: var(--color-info); }
+    
+    .image-panel { background: var(--color-card); border-radius: var(--radius-lg); border: 1px solid var(--color-border); flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .panel-header { padding: 10px 15px; border-bottom: 1px solid var(--color-border); background: rgba(0,0,0,0.2); font-weight: 500; }
+    .panel-content { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; overflow: auto; background: #000; position: relative; }
+    
+    .placeholder-img { width: 80%; aspect-ratio: 4/3; background: linear-gradient(135deg, #2c3e50, #3498db); border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 4rem; color: rgba(255,255,255,0.2); transition: all 0.3s; position: relative; overflow: hidden; }
+    
+    .aug-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 10px; width: 100%; height: 100%; }
+    .aug-item { background: linear-gradient(135deg, #2c3e50, #3498db); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: rgba(255,255,255,0.2); position: relative; overflow: hidden; transition: all 0.4s ease; }
+    
+    /* Simulate augmentations via CSS */
+    .aug-1 { filter: brightness(1.5) contrast(1.2); transform: rotate(5deg); }
+    .aug-2 { transform: scaleX(-1); filter: blur(2px); }
+    .aug-3 { filter: grayscale(0.8); transform: rotate(-10deg) scale(1.1); }
+    .aug-4 { filter: sepia(0.5) hue-rotate(45deg); }
+</style>
+
+<div class="studio-container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h4 class="mb-4">Augmentations</h4>
+        
+        <div class="control-group">
+            <h6 class="text-secondary mb-3">Geometric</h6>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span>Horizontal Flip</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="hflip" checked>
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span>Vertical Flip</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="vflip">
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+            
+            <div class="mb-2">
+                <label>Rotation <span class="val-display" id="rotVal">±15°</span></label>
+                <input type="range" class="range-input" min="0" max="360" value="15" oninput="document.getElementById('rotVal').innerText='±'+this.value+'°'">
+            </div>
+            <div class="mb-2">
+                <label>Perspective <span class="val-display" id="perspVal">0.1</span></label>
+                <input type="range" class="range-input" min="0" max="50" value="10" oninput="document.getElementById('perspVal').innerText=(this.value/100).toFixed(2)">
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <h6 class="text-secondary mb-3">Photometric</h6>
+            <div class="mb-2">
+                <label>Brightness <span class="val-display" id="brightVal">±20%</span></label>
+                <input type="range" class="range-input" min="0" max="100" value="20" oninput="document.getElementById('brightVal').innerText='±'+this.value+'%'">
+            </div>
+            <div class="mb-2">
+                <label>Contrast <span class="val-display" id="contVal">±20%</span></label>
+                <input type="range" class="range-input" min="0" max="100" value="20" oninput="document.getElementById('contVal').innerText='±'+this.value+'%'">
+            </div>
+            <div class="mb-2">
+                <label>Blur <span class="val-display" id="blurVal">0-2px</span></label>
+                <input type="range" class="range-input" min="0" max="10" value="2" oninput="document.getElementById('blurVal').innerText='0-'+this.value+'px'">
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <h6 class="text-secondary mb-3">Advanced</h6>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span>Mosaic</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" checked>
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span>MixUp</span>
+                <label class="toggle-switch">
+                    <input type="checkbox">
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+        </div>
+        
+        <div class="mt-4">
+            <label>Generate Multiplier</label>
+            <div class="input-group mb-3">
+                <input type="number" class="form-control bg-dark text-white border-secondary" value="3" min="1" max="10">
+                <div class="input-group-append">
+                    <span class="input-group-text bg-secondary border-secondary text-white">x</span>
+                </div>
+            </div>
+            <p class="small text-muted">Will generate 3,000 augmented images from 1,000 originals.</p>
+            <button class="btn btn-primary w-100 mt-2" onclick="applyAugmentations()">Apply & Preview</button>
+        </div>
+    </div>
+    
+    <!-- Main Area -->
+    <div class="main-area">
+        <div class="image-panel" style="flex: 0.8;">
+            <div class="panel-header d-flex justify-content-between">
+                <span>Original Image</span>
+                <button class="btn btn-sm btn-outline py-0">Upload Sample</button>
+            </div>
+            <div class="panel-content">
+                <div class="placeholder-img" id="originalImg">
+                    <i class="fas fa-image"></i>
+                    <div style="position: absolute; border: 2px solid #10b981; width: 40%; height: 50%; top: 25%; left: 30%; background: rgba(16, 185, 129, 0.2);">
+                        <span style="position: absolute; top: -20px; left: 0; background: #10b981; color: #000; font-size: 0.7rem; padding: 2px 5px;">Object</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="image-panel" style="flex: 1.2;">
+            <div class="panel-header d-flex justify-content-between">
+                <span>Augmented Previews</span>
+                <span class="badge badge-info">Live Preview</span>
+            </div>
+            <div class="panel-content">
+                <div class="aug-grid" id="augGrid" style="opacity: 0.5;">
+                    <div class="aug-item"><i class="fas fa-image"></i></div>
+                    <div class="aug-item"><i class="fas fa-image"></i></div>
+                    <div class="aug-item"><i class="fas fa-image"></i></div>
+                    <div class="aug-item"><i class="fas fa-image"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function applyAugmentations() {
+            let grid = document.getElementById('augGrid');
+            grid.style.opacity = '1';
+            
+            // Add CSS classes to simulate augmentations
+            let items = grid.querySelectorAll('.aug-item');
+            items[0].className = 'aug-item aug-1';
+            items[1].className = 'aug-item aug-2';
+            items[2].className = 'aug-item aug-3';
+            items[3].className = 'aug-item aug-4';
+            
+            // Re-add bounding boxes
+            items.forEach(item => {
+                item.innerHTML = `
+                    <i class="fas fa-image"></i>
+                    <div style="position: absolute; border: 2px solid #10b981; width: 40%; height: 50%; top: 25%; left: 30%; background: rgba(16, 185, 129, 0.2);"></div>
+                `;
+            });
+        }
+    </script>
+}

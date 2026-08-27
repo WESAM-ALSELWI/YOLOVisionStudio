@@ -1,0 +1,170 @@
+﻿@{
+    ViewData["Title"] = "Upload Dataset";
+}
+
+<style>
+    .drop-zone { border: 2px dashed var(--color-primary-start); border-radius: var(--radius-xl); padding: 50px; text-align: center; background: rgba(124, 58, 237, 0.05); transition: all 0.3s ease; cursor: pointer; position: relative; overflow: hidden; }
+    .drop-zone:hover, .drop-zone.dragover { background: rgba(124, 58, 237, 0.15); border-color: var(--color-primary-end); transform: scale(1.01); }
+    .drop-zone.dragover::after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 2px solid var(--color-primary-end); animation: pulseBorder 1.5s infinite; border-radius: inherit; }
+    @@keyframes pulseBorder { 0% { transform: scale(0.95); opacity: 0; } 50% { opacity: 1; } 100% { transform: scale(1.05); opacity: 0; } }
+    
+    .format-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
+    .format-card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 15px; cursor: pointer; transition: all 0.2s; text-align: center; }
+    .format-card:hover { border-color: var(--color-primary-start); }
+    .format-card.selected { border-color: var(--color-primary-end); background: rgba(6, 182, 212, 0.1); box-shadow: 0 0 10px rgba(6, 182, 212, 0.2); }
+    
+    .file-preview { margin-top: 20px; background: var(--color-card); border-radius: var(--radius-lg); padding: 15px; display: none; }
+    .progress-bar-container { width: 100%; height: 8px; background: var(--color-border); border-radius: 4px; overflow: hidden; margin-top: 15px; display: none; }
+    .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--color-primary-start), var(--color-primary-end)); width: 0%; transition: width 0.3s; }
+</style>
+
+<div class="page-header">
+    <h1 class="page-title">Upload Dataset</h1>
+    <p class="page-subtitle">Import images and annotations for training</p>
+</div>
+
+<div class="card p-4">
+    <form id="uploadForm" method="post" enctype="multipart/form-data">
+        @Html.AntiForgeryToken()
+        
+        <div class="form-group mb-4">
+            <label class="font-weight-bold mb-2">Dataset Name</label>
+            <input type="text" class="form-control" name="name" placeholder="e.g., Construction-Site-V3" required style="max-width: 400px;">
+        </div>
+
+        <div class="card mb-4 p-3" id="splitOptions">
+            <h5 class="mb-1"><i class="fas fa-cut text-primary mr-2"></i> Automatic Split</h5>
+            <p class="text-muted small">If the uploaded dataset is not already in the YOLO structure (images/train, images/val...), it will be split automatically using these percentages:</p>
+            <div class="d-flex" style="gap: 15px; max-width: 600px;">
+                <div class="flex-fill">
+                    <label class="small font-weight-bold">Train %</label>
+                    <input type="number" class="form-control" name="trainPct" id="trainPct" value="70" min="0" max="100" oninput="validateSplit()">
+                </div>
+                <div class="flex-fill">
+                    <label class="small font-weight-bold">Val %</label>
+                    <input type="number" class="form-control" name="valPct" id="valPct" value="15" min="0" max="100" oninput="validateSplit()">
+                </div>
+                <div class="flex-fill">
+                    <label class="small font-weight-bold">Test %</label>
+                    <input type="number" class="form-control" name="testPct" id="testPct" value="15" min="0" max="100" oninput="validateSplit()">
+                </div>
+                <div class="d-flex align-items-end">
+                    <span class="badge badge-primary mb-2" id="splitTotal">Total: 100%</span>
+                </div>
+            </div>
+            <small class="text-danger d-none mt-1" id="splitError">The percentages must total exactly 100%.</small>
+        </div>
+
+        <label class="font-weight-bold mb-2">Annotation Format</label>
+        <div class="format-cards">
+            <div class="format-card selected" onclick="selectFormat(this, 'yolo')">
+                <h5 class="text-primary mb-1">YOLO TXT</h5>
+                <p class="text-muted small m-0">Standard Darknet format</p>
+            </div>
+            <div class="format-card" onclick="selectFormat(this, 'coco')">
+                <h5 class="text-info mb-1">COCO JSON</h5>
+                <p class="text-muted small m-0">COCO dataset format</p>
+            </div>
+            <div class="format-card" onclick="selectFormat(this, 'voc')">
+                <h5 class="text-warning mb-1">VOC XML</h5>
+                <p class="text-muted small m-0">Pascal VOC format</p>
+            </div>
+            <div class="format-card" onclick="selectFormat(this, 'labelme')">
+                <h5 class="text-success mb-1">LabelMe</h5>
+                <p class="text-muted small m-0">LabelMe JSON format</p>
+            </div>
+            <input type="hidden" id="formatInput" name="Format" value="yolo">
+        </div>
+
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+            <i class="fas fa-cloud-upload-alt text-primary mb-3" style="font-size: 3rem;"></i>
+            <h4>Drag & Drop files here</h4>
+            <p class="text-muted">or click to browse from your computer</p>
+            <p class="small text-secondary mt-2">Supports a .zip archive containing images and annotations (any structure).</p>
+            <input type="file" id="fileInput" name="file" accept=".zip" style="display: none;" onchange="handleFiles(this.files)">
+        </div>
+
+        <div class="file-preview" id="filePreview">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="m-0"><i class="fas fa-file-archive text-info mr-2"></i> <span id="fileName">dataset.zip</span></h5>
+                <span class="badge badge-secondary" id="fileSize">45 MB</span>
+            </div>
+            <div class="progress-bar-container" id="progressContainer">
+                <div class="progress-bar-fill" id="progressBar"></div>
+            </div>
+            <div class="text-right mt-2" id="progressText" style="display: none; font-size: 0.8rem; color: var(--text-muted);">0%</div>
+        </div>
+
+        <div class="mt-4 text-right">
+            <button type="button" class="btn btn-outline mr-2">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="uploadBtn" disabled>
+                <i class="fas fa-upload mr-2"></i> Upload Dataset
+            </button>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        function selectFormat(el, format) {
+            document.querySelectorAll('.format-card').forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected');
+            document.getElementById('formatInput').value = format;
+        }
+
+        const dropZone = document.getElementById('dropZone');
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if(e.dataTransfer.files.length) {
+                handleFiles(e.dataTransfer.files);
+            }
+        });
+
+        function handleFiles(files) {
+            if(!files || files.length === 0) return;
+            
+            let name = files.length === 1 ? files[0].name : files.length + " files selected";
+            let size = 0;
+            for(let i=0; i<files.length; i++) size += files[i].size;
+            
+            size = (size / (1024*1024)).toFixed(2) + " MB";
+            
+            document.getElementById('fileName').innerText = name;
+            document.getElementById('fileSize').innerText = size;
+            document.getElementById('filePreview').style.display = 'block';
+            document.getElementById('fileInput').files.length && (document.getElementById('uploadBtn').disabled = !validateSplit());
+        }
+
+        function validateSplit() {
+            const t = parseInt(document.getElementById('trainPct').value) || 0;
+            const v = parseInt(document.getElementById('valPct').value) || 0;
+            const s = parseInt(document.getElementById('testPct').value) || 0;
+            const total = t + v + s;
+            const ok = total === 100 && t > 0;
+            document.getElementById('splitTotal').innerText = 'Total: ' + total + '%';
+            document.getElementById('splitError').classList.toggle('d-none', ok);
+            document.getElementById('uploadBtn').disabled = !ok || !document.getElementById('filePreview').style.display.includes('block');
+            return ok;
+        }
+
+        document.getElementById('uploadForm').addEventListener('submit', function () {
+            const btn = document.getElementById('uploadBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Uploading & Splitting...';
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('progressBar').style.width = '60%';
+        });
+    </script>
+}
+

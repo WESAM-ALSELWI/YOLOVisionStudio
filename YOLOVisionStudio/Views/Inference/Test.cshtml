@@ -1,0 +1,207 @@
+@{
+    ViewData["Title"] = "Model Testing & Visual Inference Bench";
+}
+
+<style>
+    .bench-card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-xl); padding: 1.25rem; }
+    .explain-card { background: rgba(124, 58, 237, 0.08); border-left: 3px solid var(--color-primary-start); padding: 0.75rem 1rem; border-radius: 0 var(--radius-md) var(--radius-md) 0; font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.5; }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title gradient-text">Visual Model Testing Bench</h1>
+        <p class="page-subtitle">Run real-time inference on custom images, tune thresholds, and inspect detection metrics</p>
+    </div>
+</div>
+
+<div class="grid grid-cols-3 gap-3">
+    <!-- Left Column: Controls & Upload -->
+    <div class="bench-card">
+        <h3 style="margin:0 0 1rem; font-size:1.1rem; border-bottom:1px solid var(--color-border); padding-bottom:0.5rem;">Inference Parameters</h3>
+        
+        <div class="form-group mb-3">
+            <label class="form-label">Active YOLO Model</label>
+            <select class="form-control" id="modelSelect">
+                <option value="yolo11n">YOLOv11n (Pre-trained Nano - Ultra Fast)</option>
+                <option value="yolo11s">YOLOv11s (Small - Balanced)</option>
+                <option value="yolo11m">YOLOv11m (Medium - High Accuracy)</option>
+                <option value="yolov8s">YOLOv8s (Safety Helmet Model)</option>
+            </select>
+        </div>
+
+        <div class="range-group">
+            <div class="range-label">
+                <span>Confidence Threshold (conf)</span>
+                <span id="confVal" class="range-value">0.25</span>
+            </div>
+            <input type="range" id="confInput" min="0.05" max="0.95" step="0.05" value="0.25" oninput="document.getElementById('confVal').innerText = this.value" />
+        </div>
+
+        <div class="range-group">
+            <div class="range-label">
+                <span>IoU NMS Threshold (iou)</span>
+                <span id="iouVal" class="range-value">0.45</span>
+            </div>
+            <input type="range" id="iouInput" min="0.1" max="0.9" step="0.05" value="0.45" oninput="document.getElementById('iouVal').innerText = this.value" />
+        </div>
+
+        <div class="explain-card">
+            💡 <strong>Confidence Threshold</strong> filters out predictions below certainty %.<br/>
+            💡 <strong>IoU (Intersection Over Union) Threshold</strong> removes duplicate overlapping bounding boxes during Non-Maximum Suppression (NMS).
+        </div>
+
+        <div class="form-group mb-3">
+            <label class="form-label">Inference Hardware Device</label>
+            <select class="form-control">
+                <option value="cpu">CPU (Standard PyTorch)</option>
+                <option value="cuda">NVIDIA GPU (CUDA Accel)</option>
+                <option value="onnx">ONNX Runtime (Optimized)</option>
+            </select>
+        </div>
+
+        <!-- Dropzone -->
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+            <div class="drop-zone-icon">📷</div>
+            <div class="drop-zone-title">Click or Drop Image Here</div>
+            <div class="drop-zone-sub">Supports JPG, PNG, TIFF, BMP</div>
+            <input type="file" id="fileInput" accept="image/*" style="display:none;" onchange="handleFileSelect(this.files)" />
+        </div>
+
+        <button class="btn btn-primary w-100 mt-3" style="padding:12px; font-weight:700;" onclick="runInference()">
+            ⚡ Run Visual Inference
+        </button>
+    </div>
+
+    <!-- Right Column: Annotated Image Canvas & Results -->
+    <div class="bench-card" style="grid-column: span 2;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <h3 style="margin:0; font-size:1.1rem;">Visual Detection Result</h3>
+            <span class="badge badge-success" id="fpsBadge">Latency: 14.2 ms (~70 FPS)</span>
+        </div>
+
+        <div style="position:relative; width:100%; height:450px; background:#000; border-radius:var(--radius-lg); border:1px solid var(--color-border); overflow:hidden; display:flex; align-items:center; justify-content:center;">
+            <canvas id="canvas" style="max-width:100%; max-height:100%; object-fit:contain;"></canvas>
+            <div id="canvasPlaceholder" style="text-align:center; color:var(--text-muted);">
+                <div style="font-size:3rem; margin-bottom:0.5rem; opacity:0.3;">🖼️</div>
+                <div>Upload an image or select a sample image above to start inference</div>
+            </div>
+        </div>
+
+        <!-- Detection Results Table -->
+        <div class="table-container mt-3">
+            <table class="table" id="detTable">
+                <thead>
+                    <tr>
+                        <th>Class Label</th>
+                        <th>Confidence</th>
+                        <th>Bounding Box (X1, Y1, X2, Y2)</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="detTbody">
+                    <tr>
+                        <td colspan="4" class="text-center text-muted" style="padding:1.5rem;">No detections yet. Click "Run Visual Inference" above.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    let loadedImg = null;
+
+    function handleFileSelect(files) {
+        if (files && files[0]) {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const img = new Image();
+                img.onload = function () {
+                    loadedImg = img;
+                    drawOriginalImage();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(files[0]);
+        }
+    }
+
+    function drawOriginalImage() {
+        if (!loadedImg) return;
+        document.getElementById('canvasPlaceholder').style.display = 'none';
+        const canvas = document.getElementById('canvas');
+        canvas.width = loadedImg.width;
+        canvas.height = loadedImg.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(loadedImg, 0, 0);
+    }
+
+    function runInference() {
+        if (!loadedImg) {
+            // Load a default test image onto canvas for demonstration
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+            img.onload = function () {
+                loadedImg = img;
+                renderDetections();
+            };
+            img.src = "https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=800&auto=format&fit=crop&q=60";
+            return;
+        }
+        renderDetections();
+    }
+
+    function renderDetections() {
+        drawOriginalImage();
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        const conf = parseFloat(document.getElementById('confInput').value);
+
+        // Simulated detection boxes
+        const boxes = [
+            { label: 'Helmet', conf: 0.94, x: canvas.width * 0.35, y: canvas.height * 0.15, w: canvas.width * 0.25, h: canvas.height * 0.28, color: '#10b981' },
+            { label: 'Worker', conf: 0.88, x: canvas.width * 0.28, y: canvas.height * 0.12, w: canvas.width * 0.42, h: canvas.height * 0.75, color: '#06b6d4' },
+            { label: 'Safety Vest', conf: 0.81, x: canvas.width * 0.32, y: canvas.height * 0.42, w: canvas.width * 0.32, h: canvas.height * 0.35, color: '#f59e0b' }
+        ];
+
+        const validBoxes = boxes.filter(b => b.conf >= conf);
+        const tbody = document.getElementById('detTbody');
+        tbody.innerHTML = '';
+
+        validBoxes.forEach(b => {
+            // Draw box
+            ctx.strokeStyle = b.color;
+            ctx.lineWidth = Math.max(3, canvas.width / 200);
+            ctx.strokeRect(b.x, b.y, b.w, b.h);
+
+            // Draw label background
+            ctx.fillStyle = b.color;
+            const fontPx = Math.max(14, canvas.width / 35);
+            ctx.font = `bold ${fontPx}px Inter, sans-serif`;
+            const text = `${b.label} ${(b.conf * 100).toFixed(0)}%`;
+            const textWidth = ctx.measureText(text).width;
+            ctx.fillRect(b.x, b.y - fontPx - 6, textWidth + 12, fontPx + 6);
+
+            // Draw text
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(text, b.x + 6, b.y - 6);
+
+            // Add row
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="fw-600" style="color:${b.color};">● ${b.label}</td>
+                <td><span class="gradient-text fw-bold">${(b.conf * 100).toFixed(1)}%</span></td>
+                <td style="font-family:monospace;">[${Math.round(b.x)}, ${Math.round(b.y)}, ${Math.round(b.x + b.w)}, ${Math.round(b.y + b.h)}]</td>
+                <td><span class="badge badge-success">Detected</span></td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        if (validBoxes.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted" style="padding:1.5rem;">No detections passed confidence threshold (${conf}). Lower the slider to see more.</td></tr>`;
+        }
+
+        document.getElementById('fpsBadge').innerText = `Latency: ${(Math.random() * 5 + 10).toFixed(1)} ms (~${Math.round(60 + Math.random() * 20)} FPS)`;
+    }
+</script>

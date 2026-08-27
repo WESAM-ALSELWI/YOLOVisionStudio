@@ -1,0 +1,183 @@
+@{
+    ViewData["Title"] = "Projects";
+}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Projects</h1>
+        <p class="page-subtitle">Manage your AI vision projects</p>
+    </div>
+    <a asp-action="Create" asp-controller="Project" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        New Project
+    </a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-6" style="padding:1rem 1.5rem;">
+    <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;position:relative;">
+            <input type="text" id="searchProjects" placeholder="Search projects..." class="form-control" style="padding-left:2.5rem;" oninput="filterProjects()" />
+            <span style="position:absolute;left:0.75rem;top:50%;transform:translateY(-50%);color:var(--color-text-muted);">🔍</span>
+        </div>
+        <select id="statusFilter" class="form-control" style="width:auto;" onchange="filterProjects()">
+            <option value="">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Draft">Draft</option>
+            <option value="Archived">Archived</option>
+        </select>
+        <select id="taskFilter" class="form-control" style="width:auto;" onchange="filterProjects()">
+            <option value="">All Tasks</option>
+            <option value="Detection">Detection</option>
+            <option value="Segmentation">Segmentation</option>
+            <option value="Pose">Pose</option>
+            <option value="Classification">Classification</option>
+        </select>
+    </div>
+</div>
+
+<!-- Project Grid -->
+<div class="project-grid" id="projectGrid">
+    <!-- Sample projects (rendered from model in production) -->
+    @{
+        var sampleProjects = new[] {
+            new { Name = "Helmet Detection", Desc = "Detect safety helmets on construction sites", Task = "Detection", Status = "Active", Datasets = 2, Models = 3, Experiments = 7, Color = "#7c3aed", Icon = "⛑️", Updated = "2 hours ago", mAP = 0.89 },
+            new { Name = "Car Counter", Desc = "Real-time vehicle counting for traffic analysis", Task = "Detection", Status = "Active", Datasets = 5, Models = 2, Experiments = 4, Color = "#06b6d4", Icon = "🚗", Updated = "Yesterday", mAP = 0.92 },
+            new { Name = "Pose Estimation", Desc = "Human pose estimation for sports analytics", Task = "Pose", Status = "Active", Datasets = 1, Models = 1, Experiments = 2, Color = "#10b981", Icon = "🏃", Updated = "3 days ago", mAP = 0.78 },
+            new { Name = "Defect Detection", Desc = "Manufacturing quality control vision system", Task = "Segmentation", Status = "Draft", Datasets = 0, Models = 0, Experiments = 0, Color = "#f59e0b", Icon = "🏭", Updated = "1 week ago", mAP = 0.0 },
+            new { Name = "Face Recognition", Desc = "Face detection and classification system", Task = "Classification", Status = "Archived", Datasets = 3, Models = 5, Experiments = 12, Color = "#ef4444", Icon = "😊", Updated = "1 month ago", mAP = 0.95 },
+            new { Name = "Fruit Inspector", Desc = "Automated fruit quality inspection pipeline", Task = "Detection", Status = "Active", Datasets = 4, Models = 2, Experiments = 8, Color = "#8b5cf6", Icon = "🍎", Updated = "5 hours ago", mAP = 0.87 },
+        };
+    }
+
+    @foreach (var project in sampleProjects)
+    {
+        <div class="project-card" data-status="@project.Status" data-task="@project.Task" data-name="@project.Name.ToLower()">
+            <div class="project-card-accent" style="background: linear-gradient(90deg, @project.Color, transparent);"></div>
+            <div class="project-card-header">
+                <div class="project-icon" style="background: @project.Color&#x27;22; color: @project.Color; font-size:1.75rem;">
+                    @project.Icon
+                </div>
+                <div class="project-menu">
+                    <button class="btn-icon project-menu-btn" onclick="toggleMenu(this)">⋯</button>
+                    <div class="project-dropdown">
+                        <a href="#" class="dropdown-item">✏️ Edit</a>
+                        <a href="#" class="dropdown-item">📋 Duplicate</a>
+                        <a href="#" class="dropdown-item">📦 Archive</a>
+                        <a href="#" class="dropdown-item danger">🗑️ Delete</a>
+                    </div>
+                </div>
+            </div>
+            <div class="project-card-body">
+                <div class="project-status-row">
+                    <span class="badge @(project.Status == "Active" ? "badge-success" : project.Status == "Draft" ? "badge-warning" : "badge-muted")">
+                        @if (project.Status == "Active") { <span class="status-dot running"></span> }
+                        @project.Status
+                    </span>
+                    <span class="badge badge-info">@project.Task</span>
+                </div>
+                <h3 class="project-name">@project.Name</h3>
+                <p class="project-desc">@project.Desc</p>
+                @if (project.mAP > 0)
+                {
+                    <div class="project-map-bar">
+                        <div class="project-map-label">
+                            <span>Best mAP50</span>
+                            <span class="gradient-text" style="font-weight:600;">@(project.mAP.ToString("P0"))</span>
+                        </div>
+                        <div class="progress-bar-track">
+                            <div class="progress-bar-fill" style="width:@(project.mAP * 100)%;"></div>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="project-card-stats">
+                <div class="project-stat">
+                    <span class="project-stat-value">@project.Datasets</span>
+                    <span class="project-stat-label">Datasets</span>
+                </div>
+                <div class="project-stat">
+                    <span class="project-stat-value">@project.Models</span>
+                    <span class="project-stat-label">Models</span>
+                </div>
+                <div class="project-stat">
+                    <span class="project-stat-value">@project.Experiments</span>
+                    <span class="project-stat-label">Runs</span>
+                </div>
+            </div>
+            <div class="project-card-footer">
+                <span class="project-updated">🕐 @project.Updated</span>
+                <a href="/Project/Detail/1" class="btn btn-sm btn-outline">Open →</a>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Empty State (hidden by default) -->
+<div id="emptyState" style="display:none; text-align:center; padding:5rem 2rem;">
+    <div style="font-size:4rem; margin-bottom:1rem;">📂</div>
+    <h3 style="font-size:1.25rem; color:var(--color-text-primary); margin-bottom:0.5rem;">No projects found</h3>
+    <p style="color:var(--color-text-muted); margin-bottom:1.5rem;">Try adjusting your filters or create a new project</p>
+    <a asp-action="Create" asp-controller="Project" class="btn btn-primary">+ Create New Project</a>
+</div>
+
+<style>
+.project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.25rem; }
+.project-card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-xl); overflow: hidden; position: relative; transition: all 0.25s; display: flex; flex-direction: column; }
+.project-card:hover { border-color: rgba(124,58,237,0.4); transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+.project-card-accent { height: 3px; width: 100%; }
+.project-card-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 1.25rem 1.25rem 0; }
+.project-icon { width: 52px; height: 52px; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; }
+.project-menu { position: relative; }
+.project-menu-btn { background: none; border: 1px solid transparent; padding: 0.25rem 0.5rem; border-radius: var(--radius-md); color: var(--color-text-muted); cursor: pointer; font-size: 1.25rem; transition: all 0.2s; }
+.project-menu-btn:hover { background: var(--color-card-hover); border-color: var(--color-border); }
+.project-dropdown { display: none; position: absolute; right: 0; top: 110%; background: var(--color-sidebar); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 0.5rem; min-width: 160px; z-index: 50; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+.project-dropdown.show { display: block; animation: fadeIn 0.15s ease; }
+.dropdown-item { display: block; padding: 0.5rem 0.75rem; border-radius: var(--radius-md); color: var(--color-text-secondary); text-decoration: none; font-size: 0.875rem; transition: all 0.15s; }
+.dropdown-item:hover { background: var(--color-card); color: var(--color-text-primary); }
+.dropdown-item.danger:hover { background: rgba(239,68,68,0.1); color: var(--color-danger); }
+.project-card-body { padding: 1rem 1.25rem; flex: 1; }
+.project-status-row { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+.project-name { font-size: 1.0625rem; font-weight: 700; color: var(--color-text-primary); margin: 0 0 0.375rem; }
+.project-desc { font-size: 0.8125rem; color: var(--color-text-muted); line-height: 1.5; margin: 0 0 0.875rem; }
+.project-map-bar { margin-top: 0.5rem; }
+.project-map-label { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 0.375rem; }
+.progress-bar-track { height: 6px; background: var(--color-bg); border-radius: 999px; overflow: hidden; }
+.progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--color-primary-start), var(--color-primary-end)); border-radius: 999px; transition: width 1s ease; }
+.project-card-stats { display: flex; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); }
+.project-stat { flex: 1; text-align: center; padding: 0.75rem 0.5rem; }
+.project-stat + .project-stat { border-left: 1px solid var(--color-border); }
+.project-stat-value { display: block; font-size: 1.125rem; font-weight: 700; color: var(--color-text-primary); }
+.project-stat-label { display: block; font-size: 0.6875rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.125rem; }
+.project-card-footer { display: flex; justify-content: space-between; align-items: center; padding: 0.875rem 1.25rem; }
+.project-updated { font-size: 0.75rem; color: var(--color-text-muted); }
+.mb-6 { margin-bottom: 1.5rem; }
+</style>
+
+<script>
+function filterProjects() {
+    const search = document.getElementById('searchProjects').value.toLowerCase();
+    const status = document.getElementById('statusFilter').value;
+    const task = document.getElementById('taskFilter').value;
+    const cards = document.querySelectorAll('.project-card');
+    let visible = 0;
+    cards.forEach(card => {
+        const nameMatch = !search || card.dataset.name.includes(search);
+        const statusMatch = !status || card.dataset.status === status;
+        const taskMatch = !task || card.dataset.task === task;
+        const show = nameMatch && statusMatch && taskMatch;
+        card.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+    document.getElementById('emptyState').style.display = visible === 0 ? 'flex' : 'none';
+    if (visible === 0) document.getElementById('projectGrid').style.display = 'none';
+    else document.getElementById('projectGrid').style.display = 'grid';
+}
+
+function toggleMenu(btn) {
+    const dropdown = btn.nextElementSibling;
+    dropdown.classList.toggle('show');
+    document.addEventListener('click', e => {
+        if (!btn.contains(e.target) && !dropdown.contains(e.target)) dropdown.classList.remove('show');
+    }, { once: true });
+}
+</script>
