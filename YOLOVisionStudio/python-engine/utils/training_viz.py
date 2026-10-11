@@ -727,6 +727,17 @@ class TrainingVisualizer:
                 elif ("detect" in nm or s.get("is_head", False)) and "detect" not in core:
                     core["detect"] = {**s, "tag": "detect", "role": "Predicts bounding boxes, classes, and confidence scores"}
 
+            if self.frame:
+                core["output"] = {
+                    "tag": "output",
+                    "name": "Final Detection Result",
+                    "role": "Final classified object detections & labels",
+                    "shape": [1, len(self.frame.get("pred", [])), 6],
+                    "image_base64": self.frame.get("image_base64"),
+                    "pred": self.frame.get("pred", []),
+                    "gt": self.frame.get("gt", [])
+                }
+
             with self.lock:
                 self.pipeline = stages
                 self.pipeline_seq += 1
