@@ -176,3 +176,59 @@ class ExportResponse(BaseModel):
     output_path: Optional[str] = None
     file_size_mb: float = 0.0
     message: str
+
+# =======================
+# Real-time Training Visualization Schemas
+# =======================
+class LayerStatistics(BaseModel):
+    layer_index: int
+    layer_name: str
+    layer_type: str
+    mean: float
+    std: float
+    min: float
+    max: float
+    sparsity: float  # Percentage of near-zero activations
+    dead_neurons: int  # Count of neurons with zero gradient
+    grad_norm: float  # L2 norm of gradients
+
+class WeightVisualization(BaseModel):
+    layer_index: int
+    layer_name: str
+    weight_shape: List[int]
+    weights_base64: str  # Grid visualization of filters
+    weight_stats: Dict[str, float]
+    bias_base64: Optional[str] = None
+
+class GradCAMRequest(BaseModel):
+    model_path: str
+    image_path: Optional[str] = None
+    image_base64: Optional[str] = None
+    target_layer: str
+    class_id: Optional[int] = None
+
+class GradCAMResponse(BaseModel):
+    original_image_base64: str
+    heatmap_base64: str
+    overlay_base64: str
+    target_class: Optional[str] = None
+    confidence: Optional[float] = None
+
+class AttentionMapRequest(BaseModel):
+    model_path: str
+    image_path: Optional[str] = None
+    image_base64: Optional[str] = None
+
+class AttentionMapResponse(BaseModel):
+    original_image_base64: str
+    attention_maps: List[Dict[str, Any]]  # Multi-scale attention maps
+    overlay_base64: str
+
+class TrainingVisualizationSnapshot(BaseModel):
+    job_id: str
+    epoch: int
+    batch: int
+    layer_statistics: List[LayerStatistics]
+    weight_visualizations: List[WeightVisualization]
+    grad_norms: Dict[int, float]
+    activation_heatmaps: List[Dict[str, Any]]

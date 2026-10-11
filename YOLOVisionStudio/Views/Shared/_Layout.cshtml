@@ -61,7 +61,8 @@
             <a href="@Url.Action("Index", "Home")" class="tn-link @(ctrl=="Home"?"active":"")">Dashboard</a>
             <a href="@Url.Action("Index", "Dataset")" class="tn-link @(ctrl=="Dataset"?"active":"")">Datasets</a>
             <a href="@Url.Action("Wizard", "Training")" class="tn-link @(ctrl=="Training"?"active":"")">Train</a>
-            <a href="@Url.Action("History", "Training")" class="tn-link @(ctrl=="Training"&&ViewContext.RouteData.Values["action"]?.ToString()=="History"?"active":"")">Jobs</a>
+            <a href="@Url.Action("Index", "Visualization")" class="tn-link @(ctrl=="Visualization"&&ViewContext.RouteData.Values["action"]?.ToString()!="CNNViz3D"?"active":"")">Visualization</a>
+            <a href="/Visualization/CNNViz3D" class="tn-link @(ctrl=="Visualization"&&ViewContext.RouteData.Values["action"]?.ToString()=="CNNViz3D"?"active":"")" style="color:#60a5fa;font-weight:600">🎮 3D Studio</a>
         </div>
         <div class="tn-right">
             <div id="engineStatus" style="display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);font-size:0.72rem;" title="Python AI Engine status">

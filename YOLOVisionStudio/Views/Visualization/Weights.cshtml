@@ -1,0 +1,159 @@
+@{
+    ViewData["Title"] = "Weight & Filter Visualization";
+}
+
+<style>
+    .viz-controls { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .viz-controls select, .viz-controls input { flex: 1; min-width: 150px; }
+    .viz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .viz-card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 20px; }
+    .viz-image { width: 100%; border-radius: 8px; margin-top: 10px; cursor: crosshair; }
+    .stats-table { width: 100%; margin-top: 15px; }
+    .stats-table td { padding: 8px; border-bottom: 1px solid var(--color-border); }
+    .stats-table .label { color: var(--text-muted); }
+    .stats-table .value { font-weight: bold; color: var(--color-primary-end); text-align: right; }
+    .layer-nav { display: flex; gap: 5px; margin-bottom: 15px; }
+    .layer-nav button { flex: 1; }
+</style>
+
+<div class="page-header">
+    <h1 class="page-title">Weight & Filter Visualization</h1>
+    <p class="page-subtitle">Inspect learned kernels and biases of each convolutional layer</p>
+</div>
+
+<div class="viz-controls">
+    <select id="modelSelect" class="form-control">
+        <option value="yolo11n.pt">YOLO11n (Nano)</option>
+        <option value="yolo11s.pt">YOLO11s (Small)</option>
+        <option value="yolo11m.pt">YOLO11m (Medium)</option>
+    </select>
+    <div class="layer-nav">
+        <button class="btn btn-outline-secondary" onclick="changeLayer(-1)">
+            <i class="fas fa-chevron-left"></i> Prev Layer
+        </button>
+        <span id="currentLayerDisplay" class="btn btn-primary" style="flex: 2;">Layer 0</span>
+        <button class="btn btn-outline-secondary" onclick="changeLayer(1)">
+            Next Layer <i class="fas fa-chevron-right"></i>
+        </button>
+    </div>
+    <button class="btn btn-primary" onclick="loadWeights()">
+        <i class="fas fa-eye mr-2"></i> Load Weights
+    </button>
+</div>
+
+<div id="resultsSection" style="display: none;">
+    <div class="viz-grid">
+        <!-- Weight Grid Visualization -->
+        <div class="viz-card">
+            <h5><i class="fas fa-th mr-2"></i>Learned Filters</h5>
+            <p class="small text-muted">First 16 filters averaged across input channels</p>
+            <img id="weightsImage" class="viz-image" alt="Weights" />
+            <div id="weightShape" class="small text-muted mt-2"></div>
+        </div>
+
+        <!-- Bias Visualization -->
+        <div class="viz-card">
+            <h5><i class="fas fa-chart-bar mr-2"></i>Bias Distribution</h5>
+            <p class="small text-muted">Histogram of bias values</p>
+            <img id="biasImage" class="viz-image" alt="Bias" style="display: none;" />
+            <p id="noBiasMsg" class="small text-muted mt-2">No bias in this layer</p>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="viz-card mt-3">
+        <h5><i class="fas fa-calculator mr-2"></i>Weight Statistics</h5>
+        <table class="stats-table">
+            <tr>
+                <td class="label">Mean</td>
+                <td class="value" id="statMean">-</td>
+            </tr>
+            <tr>
+                <td class="label">Standard Deviation</td>
+                <td class="value" id="statStd">-</td>
+            </tr>
+            <tr>
+                <td class="label">Minimum</td>
+                <td class="value" id="statMin">-</td>
+            </tr>
+            <tr>
+                <td class="label">Maximum</td>
+                <td class="value" id="statMax">-</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Layer Information -->
+    <div class="viz-card mt-3">
+        <h5><i class="fas fa-info-circle mr-2"></i>Layer Information</h5>
+        <p class="text-muted small">
+            This visualization shows the learned convolutional filters (kernels) of the selected layer. 
+            Each filter detects specific patterns (edges, textures, colors). The color intensity represents 
+            the magnitude of the learned weights. Darker colors indicate stronger learned features.
+        </p>
+    </div>
+</div>
+
+<div id="loadingSection" style="display: none; text-align: center; padding: 40px;">
+    <div class="spinner-border text-primary" role="status">
+        <span class="sr-only">Loading...</span>
+    </div>
+    <p class="mt-3">Loading weights... This may take a moment for large models.</p>
+</div>
+
+@section Scripts {
+    <script>
+        let currentLayer = 0;
+
+        function changeLayer(delta) {
+            currentLayer = Math.max(0, currentLayer + delta);
+            document.getElementById('currentLayerDisplay').textContent = `Layer ${currentLayer}`;
+        }
+
+        async function loadWeights() {
+            const modelPath = document.getElementById('modelSelect').value;
+
+            showLoading(true);
+
+            try {
+                const response = await fetch(`/Visualization/VisualizeWeights?modelPath=${encodeURIComponent(modelPath)}&layerIndex=${currentLayer}`);
+                const data = await response.json();
+
+                if (data.weights_base64) {
+                    document.getElementById('weightsImage').src = 'data:image/jpeg;base64,' + data.weights_base64;
+                    document.getElementById('weightShape').textContent = `Shape: [${data.weight_shape.join(', ')}]`;
+                    
+                    // Statistics
+                    document.getElementById('statMean').textContent = data.weight_stats.mean.toFixed(6);
+                    document.getElementById('statStd').textContent = data.weight_stats.std.toFixed(6);
+                    document.getElementById('statMin').textContent = data.weight_stats.min.toFixed(6);
+                    document.getElementById('statMax').textContent = data.weight_stats.max.toFixed(6);
+
+                    // Bias
+                    if (data.bias_base64) {
+                        document.getElementById('biasImage').src = 'data:image/jpeg;base64,' + data.bias_base64;
+                        document.getElementById('biasImage').style.display = 'block';
+                        document.getElementById('noBiasMsg').style.display = 'none';
+                    } else {
+                        document.getElementById('biasImage').style.display = 'none';
+                        document.getElementById('noBiasMsg').style.display = 'block';
+                    }
+
+                    document.getElementById('resultsSection').style.display = 'block';
+                } else {
+                    alert('Failed to load weights. Layer may not exist or model not found.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to load weights. Make sure the Python AI engine is running.');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingSection').style.display = show ? 'block' : 'none';
+            document.getElementById('resultsSection').style.display = show ? 'none' : 'block';
+        }
+    </script>
+}

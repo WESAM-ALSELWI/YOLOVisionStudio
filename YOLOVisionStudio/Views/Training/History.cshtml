@@ -1,262 +1,288 @@
-﻿@{
+@model List<YOLOVisionStudio.Models.Domain.TrainingJob>
+@{
     ViewData["Title"] = "Training History";
+    var running  = Model?.Where(j => j.Status == YOLOVisionStudio.Models.Domain.JobStatus.Running).ToList()  ?? new();
+    var finished = Model?.Where(j => j.Status != YOLOVisionStudio.Models.Domain.JobStatus.Running).OrderByDescending(j => j.Id).ToList() ?? new();
+    var all = running.Concat(finished).ToList();
 }
 
 <style>
-    .filter-bar { background: var(--color-card); padding: 15px 20px; border-radius: var(--radius-lg); display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border: 1px solid var(--color-border); }
-    
-    .history-table { width: 100%; border-collapse: collapse; background: var(--color-card); border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--color-border); }
-    .history-table th { background: rgba(0,0,0,0.2); padding: 15px; text-align: left; color: var(--text-muted); font-weight: 500; font-size: 0.85rem; text-transform: uppercase; border-bottom: 1px solid var(--color-border); }
-    .history-table td { padding: 15px; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
-    .history-table tr:last-child td { border-bottom: none; }
-    .history-table tr:hover { background: rgba(255,255,255,0.02); }
-    
-    .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
-    .status-dot.running { background: var(--color-primary-start); box-shadow: 0 0 8px var(--color-primary-start); animation: pulse 1.5s infinite; }
-    .status-dot.completed { background: var(--color-success); }
-    .status-dot.failed { background: var(--color-error); }
-    .status-dot.pending { background: var(--color-warning); }
-    @@keyframes pulse { 0% { transform: scale(0.95); opacity: 0.5; } 50% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.5; } }
-    
-    .chip { display: inline-block; padding: 2px 8px; border-radius: 12px; background: rgba(255,255,255,0.1); font-size: 0.75rem; margin-right: 5px; color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.05); }
-    
-    .expandable-row { display: none; background: #0a0c10; }
-    .expandable-row.open { display: table-row; }
-    .details-box { padding: 20px; border-left: 3px solid var(--color-primary-start); margin: 10px; background: rgba(255,255,255,0.03); border-radius: 0 8px 8px 0; }
-    
-    .metric-mini { display: inline-block; margin-right: 20px; }
-    .metric-mini-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; }
-    .metric-mini-val { font-size: 1.1rem; font-weight: bold; }
+    .filter-bar{background:var(--color-card);padding:15px 20px;border-radius:var(--radius-lg);display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;border:1px solid var(--color-border);}
+    .history-table{width:100%;border-collapse:collapse;background:var(--color-card);border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--color-border);}
+    .history-table th{background:rgba(0,0,0,.2);padding:13px 15px;text-align:left;color:var(--text-muted);font-weight:500;font-size:.82rem;text-transform:uppercase;border-bottom:1px solid var(--color-border);}
+    .history-table td{padding:13px 15px;border-bottom:1px solid var(--color-border);vertical-align:middle;font-size:.88rem;}
+    .history-table tr:last-child td{border-bottom:none;}
+    .history-table tr:hover td{background:rgba(255,255,255,.02);}
+    .history-table tr.running-row td{background:rgba(16,185,129,.03);}
+    .status-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;}
+    .status-dot.running{background:var(--color-success);box-shadow:0 0 8px var(--color-success);animation:pulse 1.5s infinite;}
+    .status-dot.completed{background:var(--color-primary-end);}
+    .status-dot.failed{background:var(--color-error);}
+    .status-dot.cancelled{background:#6b7280;}
+    .status-dot.pending{background:var(--color-warning);}
+    @@keyframes pulse{0%{transform:scale(.95);opacity:.5}50%{transform:scale(1.15);opacity:1}100%{transform:scale(.95);opacity:.5}}
+    .expandable-row{display:none;background:rgba(0,0,0,.15);}
+    .expandable-row.open{display:table-row;}
+    .details-box{padding:18px 20px;border-left:3px solid var(--color-primary-start);margin:10px;background:rgba(255,255,255,.02);border-radius:0 8px 8px 0;}
+    .chip{display:inline-block;padding:2px 8px;border-radius:12px;background:rgba(255,255,255,.08);font-size:.72rem;margin-right:5px;color:var(--text-secondary);border:1px solid rgba(255,255,255,.06);}
+    .no-jobs{text-align:center;padding:60px 20px;color:var(--text-muted);}
+    .btn-stop{padding:4px 12px;font-size:.73rem;border-radius:6px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.35);color:#ef4444;cursor:pointer;transition:all .2s;}
+    .btn-stop:hover{background:rgba(239,68,68,.3);}
+    .btn-stop:disabled{opacity:.4;cursor:not-allowed;}
+    .epoch-bar{height:5px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;margin-top:4px;min-width:70px;}
+    .epoch-fill{height:100%;background:linear-gradient(90deg,#7c3aed,#06b6d4);border-radius:3px;transition:width .6s;}
+    .map-val{color:#10b981;font-weight:700;font-family:monospace;}
+    .loss-val{color:#f59e0b;font-family:monospace;}
+    .err-msg{font-size:.72rem;color:#ef4444;margin-top:4px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 </style>
 
 <div class="page-header">
-    <h1 class="page-title">Training History</h1>
-    <p class="page-subtitle">Log of all model training executions</p>
+    <div>
+        <h1 class="page-title">Training History</h1>
+        <p class="page-subtitle">All training runs — <strong>@running.Count</strong> running · <strong>@finished.Count(j=>j.Status==YOLOVisionStudio.Models.Domain.JobStatus.Completed)</strong> completed</p>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+        <button class="btn btn-outline" onclick="resetStaleJobs()" id="resetBtn" title="Mark stuck Running jobs as Failed">
+            🔄 Reset Stale
+        </button>
+        <a asp-action="Wizard" class="btn btn-primary">+ New Training</a>
+    </div>
 </div>
+<div id="resetResult" style="display:none;padding:10px 16px;border-radius:8px;margin-bottom:14px;font-size:.85rem;"></div>
 
 <div class="filter-bar">
-    <div class="d-flex align-items-center gap-3">
-        <select class="form-control bg-dark text-white border-secondary" style="width: 150px;">
-            <option>All Statuses</option>
-            <option>Running</option>
-            <option>Completed</option>
-            <option>Failed</option>
-        </select>
-        <select class="form-control bg-dark text-white border-secondary" style="width: 150px;">
-            <option>All Models</option>
-            <option>YOLOv8</option>
-            <option>YOLOv7</option>
-        </select>
+    <div style="font-size:.82rem;color:var(--text-muted);">
+        @if (!all.Any())
+        {
+            <span>No training jobs yet.</span>
+        }
+        else
+        {
+            <span><strong>@all.Count</strong> total jobs</span>
+        }
     </div>
-    <div class="d-flex align-items-center">
-        <div class="input-group">
-            <div class="input-group-prepend">
-                <span class="input-group-text bg-dark border-secondary text-muted"><i class="fas fa-search"></i></span>
-            </div>
-            <input type="text" class="form-control bg-dark text-white border-secondary" placeholder="Search job name..." style="width: 250px;">
-        </div>
-    </div>
+    <a asp-action="Wizard" class="btn btn-primary" style="font-size:.8rem;padding:6px 16px;">🚀 Start New Training</a>
 </div>
 
+@if (!all.Any())
+{
+    <div class="no-jobs glass-card">
+        <div style="font-size:3rem;margin-bottom:12px;">🧠</div>
+        <h3 style="margin:0 0 8px;">No training jobs yet</h3>
+        <p style="margin:0 0 16px;font-size:.9rem;">Start your first training run to see it here.</p>
+        <a asp-action="Wizard" class="btn btn-primary">🚀 Start Training</a>
+    </div>
+}
+else
+{
 <table class="history-table">
     <thead>
         <tr>
-            <th style="width: 40px;"></th>
-            <th>Job Name</th>
+            <th style="width:32px;"></th>
+            <th>Job</th>
             <th>Model</th>
-            <th>Dataset</th>
-            <th>Epochs</th>
-            <th>mAP50</th>
-            <th>Duration</th>
+            <th>Progress</th>
+            <th>Best mAP@50</th>
+            <th>Loss</th>
             <th>Status</th>
+            <th>Started</th>
             <th>Actions</th>
         </tr>
     </thead>
     <tbody>
-        <!-- Row 1: Running -->
-        <tr>
-            <td class="text-center cursor-pointer" onclick="toggleRow(1)"><i class="fas fa-chevron-right text-muted" id="icon-1"></i></td>
-            <td class="font-weight-bold">Run-12-Augmented</td>
-            <td><span class="badge badge-info">YOLOv8m</span></td>
-            <td>Site-Images-v3</td>
-            <td>145 / 300</td>
-            <td>--</td>
-            <td>2h 14m</td>
-            <td><span class="status-dot running"></span> Running</td>
-            <td>
-                <button class="btn btn-sm btn-primary py-1"><i class="fas fa-desktop mr-1"></i> Monitor</button>
+    @foreach (var job in all)
+    {
+        var pct    = job.Epochs > 0 ? (int)((job.CurrentEpoch * 100.0) / job.Epochs) : 0;
+        var dotCls = job.Status.ToString().ToLowerInvariant();
+        var isRunning = job.Status == YOLOVisionStudio.Models.Domain.JobStatus.Running;
+        var isDone    = job.Status == YOLOVisionStudio.Models.Domain.JobStatus.Completed;
+        var isFailed  = job.Status == YOLOVisionStudio.Models.Domain.JobStatus.Failed;
+
+        <tr class="@(isRunning?"running-row":"")">
+            <td class="text-center" style="cursor:pointer;" onclick="toggleRow(@job.Id)">
+                <i class="fas fa-chevron-right text-muted" id="icon-@job.Id" style="font-size:.7rem;"></i>
             </td>
-        </tr>
-        <tr class="expandable-row" id="row-1">
-            <td colspan="9">
-                <div class="details-box">
-                    <div class="mb-3">
-                        <span class="metric-mini"><div class="metric-mini-label">Batch Size</div><div class="metric-mini-val">16</div></span>
-                        <span class="metric-mini"><div class="metric-mini-label">Img Size</div><div class="metric-mini-val">640</div></span>
-                        <span class="metric-mini"><div class="metric-mini-label">Optimizer</div><div class="metric-mini-val">AdamW</div></span>
-                        <span class="metric-mini"><div class="metric-mini-label">LR Initial</div><div class="metric-mini-val">0.001</div></span>
-                        <span class="metric-mini"><div class="metric-mini-label">GPU</div><div class="metric-mini-val text-info">RTX 4090 (98%)</div></span>
-                    </div>
-                    <div>
-                        <div class="text-muted small mb-1">Hyperparameters</div>
-                        <span class="chip">mosaic: 1.0</span> <span class="chip">mixup: 0.1</span> <span class="chip">fliplr: 0.5</span> <span class="chip">degrees: 10.0</span>
-                    </div>
+            <td>
+                <div style="font-weight:700;color:var(--text-primary);">@(job.Name ?? $"Job #{job.Id}")</div>
+                <div style="font-size:.7rem;color:var(--text-muted);">ID @job.Id · @(job.YoloVersion ?? "YOLO")</div>
+                @if (isFailed && !string.IsNullOrEmpty(job.ErrorMessage))
+                {
+                    <div class="err-msg" title="@job.ErrorMessage">⚠️ @job.ErrorMessage</div>
+                }
+            </td>
+            <td>
+                <span class="badge badge-info" style="font-size:.73rem;">@(job.BaseModel ?? "–")</span>
+            </td>
+            <td>
+                <div style="font-size:.82rem;font-family:monospace;">@job.CurrentEpoch / @job.Epochs</div>
+                <div class="epoch-bar" style="width:80px;">
+                    <div class="epoch-fill" style="width:@pct%;"></div>
+                </div>
+            </td>
+            <td>
+                @if (job.BestmAP50 > 0)
+                { <span class="map-val">@job.BestmAP50.ToString("F3")</span> }
+                else
+                { <span style="color:var(--text-muted);">–</span> }
+            </td>
+            <td>
+                <span class="loss-val" style="font-size:.8rem;">–</span>
+            </td>
+            <td>
+                <span class="status-dot @dotCls"></span>
+                <span style="font-size:.82rem;">@job.Status</span>
+            </td>
+            <td style="font-size:.75rem;color:var(--text-muted);">
+                @(job.StartedAt.HasValue ? job.StartedAt.Value.ToString("MMM dd, HH:mm") : "–")
+            </td>
+            <td>
+                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                    @if (isRunning)
+                    {
+                        <a asp-action="Monitor" asp-route-id="@job.Id" class="btn btn-primary" style="font-size:.73rem;padding:4px 10px;">
+                            📊 Monitor
+                        </a>
+                        <a href="/Visualization/CNNViz3D?job=@Uri.EscapeDataString(job.PythonJobId ?? "")" target="_blank"
+                           class="btn btn-outline" style="font-size:.73rem;padding:4px 10px;"
+                           @(string.IsNullOrEmpty(job.PythonJobId) ? "style='display:none'" : "")>
+                            🧠 3D Live
+                        </a>
+                        <button class="btn-stop" id="stopBtn-@job.Id"
+                                onclick="stopJob(@job.Id,'@job.PythonJobId')"
+                                @(string.IsNullOrEmpty(job.PythonJobId) ? "disabled" : "")>
+                            ⏹ Stop
+                        </button>
+                    }
+                    else if (isDone)
+                    {
+                        <a asp-action="Monitor" asp-route-id="@job.Id" class="btn btn-outline" style="font-size:.73rem;padding:4px 10px;">
+                            📈 Results
+                        </a>
+                    }
+                    else
+                    {
+                        <a asp-action="Monitor" asp-route-id="@job.Id" class="btn btn-outline" style="font-size:.73rem;padding:4px 10px;">
+                            View
+                        </a>
+                    }
                 </div>
             </td>
         </tr>
-
-        <!-- Row 2: Completed -->
-        <tr>
-            <td class="text-center cursor-pointer" onclick="toggleRow(2)"><i class="fas fa-chevron-right text-muted" id="icon-2"></i></td>
-            <td class="font-weight-bold">Run-11-Baseline</td>
-            <td><span class="badge badge-info">YOLOv8m</span></td>
-            <td>Site-Images-v2</td>
-            <td>300 / 300</td>
-            <td class="text-success font-weight-bold">89.4%</td>
-            <td>4h 12m</td>
-            <td><span class="status-dot completed"></span> Completed</td>
-            <td>
-                <button class="btn btn-sm btn-outline py-1"><i class="fas fa-download"></i></button>
-                <button class="btn btn-sm btn-outline py-1 text-danger border-danger"><i class="fas fa-trash"></i></button>
-            </td>
-        </tr>
-        <tr class="expandable-row" id="row-2">
+        <tr class="expandable-row" id="row-@job.Id">
             <td colspan="9">
                 <div class="details-box">
-                    <div class="mb-3">
-                        <span class="metric-mini"><div class="metric-mini-label">Best Epoch</div><div class="metric-mini-val">284</div></span>
-                        <span class="metric-mini"><div class="metric-mini-label">mAP50-95</div><div class="metric-mini-val">64.2%</div></span>
-                        <span class="metric-mini"><div class="metric-mini-label">Precision</div><div class="metric-mini-val">87.1%</div></span>
-                        <span class="metric-mini"><div class="metric-mini-label">Recall</div><div class="metric-mini-val">84.5%</div></span>
+                    <div style="display:flex;flex-wrap:wrap;gap:18px;margin-bottom:10px;">
+                        <span>
+                            <div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:3px;">Batch Size</div>
+                            <div style="font-weight:700;">@job.BatchSize</div>
+                        </span>
+                        <span>
+                            <div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:3px;">Image Size</div>
+                            <div style="font-weight:700;">@job.ImageSize px</div>
+                        </span>
+                        <span>
+                            <div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:3px;">Optimizer</div>
+                            <div style="font-weight:700;">@(job.Optimizer ?? "auto")</div>
+                        </span>
+                        <span>
+                            <div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:3px;">Learning Rate</div>
+                            <div style="font-weight:700;">@job.LearningRate</div>
+                        </span>
+                        <span>
+                            <div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:3px;">Best mAP50-95</div>
+                            <div style="font-weight:700;color:#10b981;">@(job.BestmAP5095 > 0 ? job.BestmAP5095.ToString("F3") : "–")</div>
+                        </span>
+                        @if (!string.IsNullOrEmpty(job.PythonJobId))
+                        {
+                        <span>
+                            <div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:3px;">Python Job ID</div>
+                            <div style="font-weight:700;font-family:monospace;font-size:.72rem;">@job.PythonJobId[..Math.Min(12,job.PythonJobId.Length)]…</div>
+                        </span>
+                        }
                     </div>
-                    <div>
-                        <button class="btn btn-sm btn-outline mr-2">View Charts</button>
-                        <button class="btn btn-sm btn-outline mr-2">Export Model</button>
-                    </div>
+                    @if (!string.IsNullOrEmpty(job.ErrorMessage))
+                    {
+                        <div style="background:rgba(239,68,68,.08);border-left:3px solid #ef4444;padding:8px 12px;border-radius:0 6px 6px 0;font-size:.78rem;color:#ef4444;margin-top:6px;">
+                            <strong>Error:</strong> @job.ErrorMessage
+                        </div>
+                    }
                 </div>
             </td>
         </tr>
-        
-        <!-- Row 3: Completed -->
-        <tr>
-            <td class="text-center cursor-pointer"><i class="fas fa-chevron-right text-muted"></i></td>
-            <td class="font-weight-bold">Run-10-Nano-Fast</td>
-            <td><span class="badge badge-secondary">YOLOv8n</span></td>
-            <td>Site-Images-v2</td>
-            <td>200 / 200</td>
-            <td>74.5%</td>
-            <td>1h 30m</td>
-            <td><span class="status-dot completed"></span> Completed</td>
-            <td>
-                <button class="btn btn-sm btn-outline py-1"><i class="fas fa-download"></i></button>
-                <button class="btn btn-sm btn-outline py-1 text-danger border-danger"><i class="fas fa-trash"></i></button>
-            </td>
-        </tr>
-
-        <!-- Row 4: Failed -->
-        <tr>
-            <td class="text-center cursor-pointer"><i class="fas fa-chevron-right text-muted"></i></td>
-            <td class="font-weight-bold">Run-09-Large</td>
-            <td><span class="badge badge-primary">YOLOv8l</span></td>
-            <td>Site-Images-v2</td>
-            <td>12 / 300</td>
-            <td>--</td>
-            <td>0h 15m</td>
-            <td><span class="status-dot failed"></span> Failed (OOM)</td>
-            <td>
-                <button class="btn btn-sm btn-outline py-1"><i class="fas fa-list-alt"></i> Logs</button>
-            </td>
-        </tr>
-        
-        <!-- Row 5: Completed -->
-        <tr>
-            <td class="text-center cursor-pointer"><i class="fas fa-chevron-right text-muted"></i></td>
-            <td class="font-weight-bold">Run-08-Test</td>
-            <td><span class="badge badge-info">YOLOv8m</span></td>
-            <td>Initial-Batch</td>
-            <td>100 / 100</td>
-            <td>65.2%</td>
-            <td>0h 45m</td>
-            <td><span class="status-dot completed"></span> Completed</td>
-            <td>
-                <button class="btn btn-sm btn-outline py-1"><i class="fas fa-download"></i></button>
-                <button class="btn btn-sm btn-outline py-1 text-danger border-danger"><i class="fas fa-trash"></i></button>
-            </td>
-        </tr>
-
-        <!-- Row 6: Failed -->
-        <tr>
-            <td class="text-center cursor-pointer"><i class="fas fa-chevron-right text-muted"></i></td>
-            <td class="font-weight-bold">Run-07-OldData</td>
-            <td><span class="badge badge-info">YOLOv8m</span></td>
-            <td>Initial-Batch</td>
-            <td>0 / 100</td>
-            <td>--</td>
-            <td>0h 01m</td>
-            <td><span class="status-dot failed"></span> Failed (Data Error)</td>
-            <td>
-                <button class="btn btn-sm btn-outline py-1"><i class="fas fa-list-alt"></i> Logs</button>
-            </td>
-        </tr>
-
-        <!-- Row 7: Completed -->
-        <tr>
-            <td class="text-center cursor-pointer"><i class="fas fa-chevron-right text-muted"></i></td>
-            <td class="font-weight-bold">Run-06-Demo</td>
-            <td><span class="badge badge-secondary">YOLOv8n</span></td>
-            <td>Demo-Set</td>
-            <td>50 / 50</td>
-            <td>52.1%</td>
-            <td>0h 10m</td>
-            <td><span class="status-dot completed"></span> Completed</td>
-            <td>
-                <button class="btn btn-sm btn-outline py-1"><i class="fas fa-download"></i></button>
-                <button class="btn btn-sm btn-outline py-1 text-danger border-danger"><i class="fas fa-trash"></i></button>
-            </td>
-        </tr>
-
-        <!-- Row 8: Pending -->
-        <tr>
-            <td class="text-center cursor-pointer"><i class="fas fa-chevron-right text-muted"></i></td>
-            <td class="font-weight-bold">Run-13-Queued</td>
-            <td><span class="badge badge-primary">YOLOv8x</span></td>
-            <td>Site-Images-v3</td>
-            <td>0 / 500</td>
-            <td>--</td>
-            <td>--</td>
-            <td><span class="status-dot pending"></span> Queued</td>
-            <td>
-                <button class="btn btn-sm btn-outline py-1 text-danger border-danger"><i class="fas fa-times"></i> Cancel</button>
-            </td>
-        </tr>
+    }
     </tbody>
 </table>
-
-<div class="d-flex justify-content-between align-items-center mt-3">
-    <div class="text-muted small">Showing 1 to 8 of 24 entries</div>
-    <ul class="pagination mb-0" style="display: flex; list-style: none; gap: 5px;">
-        <li><button class="btn btn-sm btn-outline" disabled>&laquo;</button></li>
-        <li><button class="btn btn-sm btn-primary">1</button></li>
-        <li><button class="btn btn-sm btn-outline">2</button></li>
-        <li><button class="btn btn-sm btn-outline">3</button></li>
-        <li><button class="btn btn-sm btn-outline">&raquo;</button></li>
-    </ul>
-</div>
-
-@section Scripts {
-    <script>
-        function toggleRow(id) {
-            let row = document.getElementById('row-' + id);
-            let icon = document.getElementById('icon-' + id);
-            
-            if (row.classList.contains('open')) {
-                row.classList.remove('open');
-                icon.className = 'fas fa-chevron-right text-muted';
-            } else {
-                row.classList.add('open');
-                icon.className = 'fas fa-chevron-down text-primary';
-            }
-        }
-    </script>
 }
 
+@section Scripts {
+<script>
+function toggleRow(id) {
+    const row  = document.getElementById('row-' + id);
+    const icon = document.getElementById('icon-' + id);
+    const open = row.classList.toggle('open');
+    icon.className = open ? 'fas fa-chevron-down text-primary' : 'fas fa-chevron-right text-muted';
+}
+
+async function stopJob(jobId, pythonJobId) {
+    const btn = document.getElementById('stopBtn-' + jobId);
+    if (!confirm('Stop this training job? The current epoch will be saved.')) return;
+    btn.disabled = true;
+    btn.textContent = '⏳ Stopping…';
+    try {
+        // Tell Python engine to stop
+        if (pythonJobId) {
+            await fetch('http://localhost:8000/training/' + pythonJobId + '/stop', { method: 'POST' });
+        }
+        // Mark in our DB
+        await fetch('/api/training/' + jobId + '/stop', { method: 'POST' });
+        btn.textContent = '✅ Stopped';
+        setTimeout(() => location.reload(), 1200);
+    } catch(e) {
+        btn.textContent = '❌ Failed';
+        btn.disabled = false;
+        setTimeout(() => { btn.textContent = '⏹ Stop'; btn.disabled = false; }, 2000);
+    }
+}
+
+async function resetStaleJobs() {
+    const btn = document.getElementById('resetBtn');
+    const res = document.getElementById('resetResult');
+    btn.disabled = true;
+    btn.textContent = '⏳ Checking…';
+    try {
+        const r    = await fetch('/api/training/reset-stale', { method: 'POST' });
+        const data = await r.json();
+        res.style.cssText = `display:block;padding:10px 16px;border-radius:8px;margin-bottom:14px;font-size:.85rem;
+            background:${data.reset>0?'rgba(16,185,129,.12)':'rgba(107,114,128,.12)'};
+            border:1px solid ${data.reset>0?'rgba(16,185,129,.3)':'rgba(107,114,128,.3)'};
+            color:${data.reset>0?'#10b981':'#9ca3af'}`;
+        res.textContent = '✅ ' + data.message;
+        if (data.reset > 0) setTimeout(() => location.reload(), 1200);
+    } catch(e) {
+        res.style.cssText = 'display:block;padding:10px 16px;border-radius:8px;background:rgba(239,68,68,.1);color:#ef4444;';
+        res.textContent   = '❌ ' + e.message;
+    } finally {
+        btn.disabled  = false;
+        btn.textContent = '🔄 Reset Stale';
+    }
+}
+
+// Auto-refresh epoch/loss for running jobs every 5 seconds
+async function refreshRunning() {
+    try {
+        const r    = await fetch('/api/training/jobs');
+        const jobs = await r.json();
+        jobs.filter(j => j.status === 'Running').forEach(j => {
+            // Update epoch display if element exists
+            const el = document.querySelector(`[data-jobid="${j.id}"] .epoch-fill`);
+            if (el && j.totalEpochs > 0) {
+                el.style.width = Math.round(j.currentEpoch * 100 / j.totalEpochs) + '%';
+            }
+        });
+    } catch {}
+}
+if (document.querySelector('.status-dot.running')) {
+    setInterval(refreshRunning, 6000);
+}
+</script>
+}

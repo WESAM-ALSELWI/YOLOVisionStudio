@@ -81,8 +81,11 @@
             <div class="progress-bar" id="epochProgressBar" style="width:@pct%;transition:width .5s ease;"></div>
         </div>
     </div>
-    <div style="display:flex;gap:8px;">
+    <div style="display:flex;gap:8px;align-items:center;">
         <a href="@Url.Action("History","Training")" class="btn btn-secondary">← Back</a>
+        <a href="/Visualization/CNNViz3D@(!string.IsNullOrEmpty(job?.PythonJobId) ? "?job=" + Uri.EscapeDataString(job.PythonJobId) : "")" target="_blank" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#3b82f6,#7c3aed);border:none;">
+            🎮 3D Neural Studio ↗
+        </a>
         <button class="btn btn-outline" title="Ultralytics trains in native PyTorch loops — pausing mid-run is not supported. Use Stop instead."
                 onclick="alert('Pause is not supported by the YOLO runtime.\nUse Stop instead — resume later from last.pt.')">⏸ Pause</button>
         @if (job?.Status == YOLOVisionStudio.Models.Domain.JobStatus.Running)
@@ -97,6 +100,13 @@
     <button class="tab-btn active" data-tab="tab-live">🧠 Live Network</button>
     <button class="tab-btn" data-tab="tab-metrics">📈 Metrics</button>
     <button class="tab-btn" data-tab="tab-log">📋 Logs</button>
+    @{ var monJob = Model?.Job; }
+    <a class="tab-btn" style="text-decoration:none;"
+       href="/Visualization/CNNViz3D@(!string.IsNullOrEmpty(monJob?.PythonJobId) ? "?job=" + Uri.EscapeDataString(monJob.PythonJobId) : "")"
+       target="_blank"
+       title="Open full-screen 3D YOLO network visualization — shows real activation heatmaps, gradient flow and training image live">
+        🎮 3D Live Viz ↗
+    </a>
     <div style="margin-left:auto;display:flex;align-items:center;">
         <span id="wsState" class="badge badge-warning">Connecting…</span>
     </div>
@@ -165,7 +175,158 @@
     </div>
 </div>
 
+<!-- ================= TAB: 3D PLAYGROUND ================= -->
+<div class="tab-pane" id="tab-3d">
+<style>
+    .playground-container { width:100%; height:calc(100vh - 300px); background:#050508; border:1px solid var(--color-border); border-radius:var(--radius-lg); position:relative; overflow:hidden; }
+    #featurePipeline3d { width:100%; height:100%; display:block; }
+
+    /* Left sidebar */
+    .pipeline-sidebar { position:absolute; top:16px; left:16px; width:240px; background:rgba(5,5,10,0.92); padding:16px; border-radius:12px; z-index:10; backdrop-filter:blur(12px); border:1px solid rgba(124,58,237,0.35); max-height:calc(100% - 32px); overflow-y:auto; }
+    .pipeline-sidebar h6 { color:#e2e8f0; margin:0 0 12px; font-size:0.88rem; font-weight:700; display:flex; align-items:center; gap:6px; }
+    .p-live-dot { width:8px; height:8px; background:#10b981; border-radius:50%; animation:plive 1.4s infinite; }
+    @@keyframes plive { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.3)} }
+    .metric-section { margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.07); }
+    .metric-section:last-child { border-bottom:none; margin-bottom:0; }
+    .section-title { color:#7c3aed; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin:0 0 8px; }
+    .metric-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:0.78rem; }
+    .metric-label { color:#9ca3af; }
+    .metric-value { color:#e2e8f0; font-weight:700; font-family:monospace; }
+    .metric-value.hot { color:#ef4444; }
+    .metric-value.good { color:#10b981; }
+
+    /* Confidence bars — real data from frame.classes[] */
+    .conf-item { margin-bottom:8px; }
+    .conf-header { display:flex; justify-content:space-between; font-size:0.72rem; margin-bottom:3px; }
+    .conf-name { color:#d1d5db; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px; }
+    .conf-pct { color:#7c3aed; font-weight:700; font-family:monospace; }
+    .conf-track { height:5px; background:rgba(255,255,255,.08); border-radius:3px; overflow:hidden; }
+    .conf-fill { height:100%; background:linear-gradient(90deg,#7c3aed,#06b6d4); border-radius:3px; transition:width .35s ease; }
+
+    /* Grad bars */
+    .grad-section { }
+    .grad-bars-wrap { display:flex; align-items:flex-end; gap:2px; height:64px; padding:0 2px; }
+    .grad-bar { flex:1; border-radius:2px 2px 0 0; min-width:4px; transition:height .3s ease; background:linear-gradient(180deg,#ef4444,#7c3aed); }
+    .grad-labels { display:flex; gap:2px; margin-top:3px; }
+    .grad-lbl { flex:1; text-align:center; font-size:0.5rem; color:#6b7280; min-width:4px; }
+
+    /* Layer info HUD */
+    .layer-hud { position:absolute; bottom:60px; right:16px; width:220px; background:rgba(5,5,10,0.92); padding:14px; border-radius:10px; z-index:10; backdrop-filter:blur(12px); border:1px solid rgba(124,58,237,0.35); display:none; }
+    .layer-hud h6 { color:#e2e8f0; margin:0 0 10px; font-size:0.82rem; font-weight:700; }
+    .hud-row { display:flex; justify-content:space-between; font-size:0.72rem; margin-bottom:5px; }
+    .hud-label { color:#9ca3af; }
+    .hud-value { color:#7c3aed; font-weight:700; font-family:monospace; }
+
+    /* Bottom bar */
+    .viz-bottom-bar { position:absolute; bottom:0; left:0; right:0; height:48px; background:rgba(5,5,10,0.9); border-top:1px solid rgba(255,255,255,.06); display:flex; align-items:center; gap:24px; padding:0 20px; z-index:10; }
+    .bottom-stat { display:flex; align-items:center; gap:6px; }
+    .bottom-label { font-size:0.68rem; color:#6b7280; text-transform:uppercase; letter-spacing:.04em; }
+    .bottom-value { font-size:0.82rem; font-weight:700; color:#e2e8f0; font-family:monospace; }
+
+    /* Zoom controls */
+    .zoom-controls { position:absolute; bottom:60px; left:50%; transform:translateX(-50%); background:rgba(5,5,10,0.9); padding:8px 16px; border-radius:30px; z-index:10; display:flex; gap:8px; border:1px solid rgba(124,58,237,0.3); }
+    .zoom-btn { width:32px; height:32px; border-radius:50%; background:rgba(255,255,255,.08); border:none; color:#e2e8f0; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .2s; font-size:0.75rem; }
+    .zoom-btn:hover { background:rgba(124,58,237,.4); }
+
+    /* Waiting state */
+    .waiting-msg { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:#6b7280; gap:12px; }
+    .waiting-msg .wm-icon { font-size:3rem; }
+    .waiting-msg .wm-text { font-size:0.9rem; text-align:center; line-height:1.5; }
+</style>
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 10px;">
+  <p style="font-size:0.82rem;color:var(--text-muted);margin:0;">
+    <b>Live neural network visualization</b> — watch each layer activate, gradients flow back, and weights update.
+    <b>Cyan particles = forward pass</b> · <b>Red particles = backprop</b> · <b>Edge glow = learning intensity</b>.
+  </p>
+  <a id="fullscreenVizLink" href="/Visualization/CNNViz3D" target="_blank" class="btn btn-primary" style="font-size:0.75rem;padding:6px 14px;white-space:nowrap;margin-left:12px;">
+    ⛶ Full Screen Viz
+  </a>
+</div>
+@{var pvJob = (Model?.Job);}
+<script>
+// Pass the pythonJobId directly to the full-screen viz so it auto-connects
+(function(){
+    const pid = "@(pvJob?.PythonJobId ?? "")";
+    if(pid) {
+        document.getElementById('fullscreenVizLink').href = '/Visualization/CNNViz3D?job=' + encodeURIComponent(pid);
+    }
+})();
+</script>
+
+<div class="playground-container">
+    <canvas id="featurePipeline3d"></canvas>
+
+    <!-- Left sidebar: live metrics + real confidence scores + gradient bars -->
+    <div class="pipeline-sidebar">
+        <h6><span class="p-live-dot"></span> Live Metrics</h6>
+
+        <div class="metric-section">
+            <div class="section-title">Training Progress</div>
+            <div class="metric-row"><span class="metric-label">Epoch</span><span class="metric-value" id="pipeEpoch">–</span></div>
+            <div class="metric-row"><span class="metric-label">Batch</span><span class="metric-value" id="pipeBatch">–</span></div>
+            <div class="metric-row"><span class="metric-label">Box Loss</span><span class="metric-value" id="pipeBoxLoss">–</span></div>
+            <div class="metric-row"><span class="metric-label">Cls Loss</span><span class="metric-value" id="pipeClsLoss">–</span></div>
+            <div class="metric-row"><span class="metric-label">DFL Loss</span><span class="metric-value" id="pipeDflLoss">–</span></div>
+            <div class="metric-row"><span class="metric-label">mAP@50</span><span class="metric-value good" id="pipeMap">–</span></div>
+            <div class="metric-row"><span class="metric-label">LR</span><span class="metric-value" id="pipeLR">–</span></div>
+        </div>
+
+        <div class="metric-section">
+            <div class="section-title">Confidence Scores</div>
+            <div id="pipeConfidence">
+                <div style="font-size:0.72rem;color:#6b7280;">Waiting for first prediction…</div>
+            </div>
+        </div>
+
+        <div class="metric-section grad-section">
+            <div class="section-title">Gradient Flow (per layer)</div>
+            <div class="grad-bars-wrap" id="pipeGradBars"></div>
+            <div class="grad-labels" id="pipeGradLabels"></div>
+        </div>
+
+        <div class="metric-section">
+            <div class="section-title">Controls</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button class="btn btn-outline" style="flex:1;font-size:0.7rem;padding:5px 8px;" onclick="resetPipelineView()">⊞ Reset</button>
+                <button class="btn btn-outline" style="flex:1;font-size:0.7rem;padding:5px 8px;" onclick="toggleAutoRotate()" id="rotateBtn">↻ Rotate</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Layer info HUD (appears on click) -->
+    <div class="layer-hud" id="layerHud">
+        <h6 id="hudLayerName">Layer</h6>
+        <div class="hud-row"><span class="hud-label">Type</span><span class="hud-value" id="hudType">–</span></div>
+        <div class="hud-row"><span class="hud-label">Shape</span><span class="hud-value" id="hudShape">–</span></div>
+        <div class="hud-row"><span class="hud-label">Grad Norm</span><span class="hud-value" id="hudGrad">–</span></div>
+        <div class="hud-row"><span class="hud-label">Act Range</span><span class="hud-value" id="hudActRange">–</span></div>
+        <button style="width:100%;margin-top:8px;font-size:0.7rem;" class="btn btn-outline" onclick="document.getElementById('layerHud').style.display='none'">✕ Close</button>
+    </div>
+
+    <!-- Zoom controls -->
+    <div class="zoom-controls">
+        <button class="zoom-btn" onclick="zoomIn()" title="Zoom In"><i class="fas fa-plus"></i></button>
+        <button class="zoom-btn" onclick="zoomOut()" title="Zoom Out"><i class="fas fa-minus"></i></button>
+        <button class="zoom-btn" onclick="resetPipelineView()" title="Reset View"><i class="fas fa-expand"></i></button>
+        <button class="zoom-btn" onclick="toggleAutoRotate()" title="Auto-Rotate"><i class="fas fa-sync"></i></button>
+    </div>
+
+    <!-- Bottom HUD bar -->
+    <div class="viz-bottom-bar">
+        <div class="bottom-stat"><span class="bottom-label">Epoch</span><span class="bottom-value" id="botEpoch">–</span></div>
+        <div class="bottom-stat"><span class="bottom-label">Total Loss</span><span class="bottom-value" id="botLoss">–</span></div>
+        <div class="bottom-stat"><span class="bottom-label">mAP50</span><span class="bottom-value" id="botMap">–</span></div>
+        <div class="bottom-stat"><span class="bottom-label">Layers</span><span class="bottom-value" id="botLayers">–</span></div>
+        <div class="bottom-stat" style="margin-left:auto;font-size:0.68rem;color:#6b7280;">
+            🔴 glow = gradient · 🟣 face = activation map · ── = skip connection
+        </div>
+    </div>
+</div>
+</div>
+
 <!-- ================= TAB: METRICS ================= -->
+
 <div class="tab-pane" id="tab-metrics">
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;">
         <div class="monitor-stat"><div class="monitor-stat-val gradient-text" id="stat-map50">@(job?.BestmAP50.ToString("F3") ?? "0.000")</div><div class="monitor-stat-label">mAP50</div></div>
@@ -533,6 +694,14 @@ function drawPred(frame) {
             </div>`).join('');
     }
     updateClassifier(frame);
+    
+    // Update 3D pipeline with real training data
+    update3DPipelineWithRealData(frame);
+    
+    // Update metrics in 3D tab
+    if (frame.epoch) document.getElementById('pipeEpoch').textContent = `${frame.epoch}/${totalEpochs}`;
+    if (frame.loss) document.getElementById('pipeLoss').textContent = frame.loss.toFixed(4);
+    if (frame.map50) document.getElementById('pipeMap').textContent = frame.map50.toFixed(3);
 }
 
 function barRow(label, pctText, pct, color) {
@@ -676,10 +845,417 @@ async function stopTraining() {
     } catch (e) { addLog('Error stopping: ' + e.message, 'error'); }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   REAL 3D CNN STACKED-PLANES VISUALIZATION (Monitor tab-3d)
+   ───────────────────────────────────────────────────────────
+   • Each YOLO layer = stack of thin planes (one per channel)
+   • Plane size ∝ real spatial dims (H×W from pipeline.shape)
+   • Plane textures = real activation thumbnails from WS
+   • Edge glow = real gradient norm (blue→red per backprop)
+   • Skip connections = arcs using stage.from[] indices
+   ═══════════════════════════════════════════════════════════ */
+
+let viz3 = {
+    scene:null, camera:null, renderer:null, raycaster:null, mouse:null,
+    layerGroups:[], connLines:[], texCache:{},
+    initialized:false,
+    autoRotating:true,
+    isDragging:false, prevMx:0, prevMy:0,
+    phi:1.0, theta:-0.3, radius:320,
+    target:new Float32Array(3),
+    lastGradNorms:{}, lastPipeline:[],
+    currentLoss:0
+};
+
+const V3_BASE   = 28;   // display px for 320-wide spatial dim
+const V3_GAP    = 48;   // spacing between layers along X
+const V3_PZGAP  = 0.85; // spacing between stacked planes within a layer
+let   V3_MAX_P  = 16;   // max planes shown per layer
+
+const V3_TYPE_COLOR = {
+    Conv:0x7c3aed, Conv2d:0x7c3aed,
+    C2f:0x06b6d4,  C2F:0x06b6d4, CSP:0x06b6d4,
+    SPPF:0x10b981,
+    Upsample:0x3b82f6, Concat:0x94a3b8,
+    Detect:0xf59e0b
+};
+function _v3c(t){ return V3_TYPE_COLOR[t]||0x64748b; }
+
+// YOLO11n skeleton (shown before real data arrives)
+const V3_SKELETON = [
+    {index:0,name:'Conv_0',   type:'Conv', shape:[1,16,320,320],from:[]},
+    {index:1,name:'Conv_1',   type:'Conv', shape:[1,32,160,160],from:[0]},
+    {index:2,name:'C2f_2',    type:'C2f',  shape:[1,32,160,160],from:[1]},
+    {index:3,name:'Conv_3',   type:'Conv', shape:[1,64,80,80],  from:[2]},
+    {index:4,name:'C2f_4',    type:'C2f',  shape:[1,64,80,80],  from:[3]},
+    {index:5,name:'Conv_5',   type:'Conv', shape:[1,128,40,40], from:[4]},
+    {index:6,name:'C2f_6',    type:'C2f',  shape:[1,128,40,40], from:[5]},
+    {index:7,name:'Conv_7',   type:'Conv', shape:[1,256,20,20], from:[6]},
+    {index:8,name:'C2f_8',    type:'C2f',  shape:[1,256,20,20], from:[7]},
+    {index:9,name:'SPPF_9',   type:'SPPF', shape:[1,256,20,20], from:[8]},
+    {index:10,name:'Up_10',   type:'Upsample',shape:[1,256,40,40],from:[9]},
+    {index:11,name:'Cat_11',  type:'Concat',  shape:[1,384,40,40],from:[10,6]},
+    {index:12,name:'C2f_12',  type:'C2f',  shape:[1,128,40,40], from:[11]},
+    {index:13,name:'Up_13',   type:'Upsample',shape:[1,128,80,80],from:[12]},
+    {index:14,name:'Cat_14',  type:'Concat',  shape:[1,192,80,80],from:[13,4]},
+    {index:15,name:'C2f_15',  type:'C2f',  shape:[1,64,80,80],  from:[14]},
+    {index:16,name:'Conv_16', type:'Conv', shape:[1,64,40,40],  from:[15]},
+    {index:17,name:'Cat_17',  type:'Concat',  shape:[1,192,40,40],from:[16,12]},
+    {index:18,name:'C2f_18',  type:'C2f',  shape:[1,128,40,40], from:[17]},
+    {index:19,name:'Conv_19', type:'Conv', shape:[1,128,20,20], from:[18]},
+    {index:20,name:'Cat_20',  type:'Concat',  shape:[1,384,20,20],from:[19,9]},
+    {index:21,name:'C2f_21',  type:'C2f',  shape:[1,256,20,20], from:[20]},
+    {index:22,name:'Detect_22',type:'Detect',shape:[1,256,20,20],from:[15,18,21]},
+];
+
+function init3D() {
+    if (viz3.initialized) return;
+    const canvas = document.getElementById('featurePipeline3d');
+    if (!canvas) return;
+    if (typeof THREE === 'undefined') {
+        const s = document.createElement('script');
+        s.src = 'https://unpkg.com/three@0.160.0/build/three.min.js';
+        s.onload  = () => _v3Build(canvas);
+        s.onerror = () => { canvas.insertAdjacentHTML('afterend','<div style="color:#ef4444;padding:20px">Three.js load failed</div>'); };
+        document.head.appendChild(s);
+    } else { _v3Build(canvas); }
+}
+
+function _v3Build(canvas) {
+    const W = canvas.clientWidth||800, H = canvas.clientHeight||500;
+
+    viz3.scene = new THREE.Scene();
+    viz3.scene.background = new THREE.Color(0x000000);
+    viz3.scene.fog = new THREE.FogExp2(0x000000, 0.0015);
+
+    viz3.camera = new THREE.PerspectiveCamera(42, W/H, 0.5, 2000);
+    _v3Cam();
+
+    viz3.renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+    viz3.renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+    viz3.renderer.setSize(W, H);
+
+    viz3.scene.add(new THREE.AmbientLight(0x050010, 1.5));
+    const pl=new THREE.PointLight(0x4040ff,3,800); pl.position.set(-80,120,150); viz3.scene.add(pl);
+    const pl2=new THREE.PointLight(0x00ffcc,2,600); pl2.position.set(200,-60,-80); viz3.scene.add(pl2);
+
+    const grid=new THREE.GridHelper(2000,80,0x0a0a18,0x0a0a18);
+    grid.position.y=-40; grid.material.transparent=true; grid.material.opacity=0.3;
+    viz3.scene.add(grid);
+
+    viz3.raycaster = new THREE.Raycaster();
+    viz3.mouse     = new THREE.Vector2();
+
+    canvas.addEventListener('mousedown', e=>{ viz3.isDragging=true; viz3.prevMx=e.clientX; viz3.prevMy=e.clientY; });
+    canvas.addEventListener('mousemove', e=>{
+        if (!viz3.isDragging) return;
+        viz3.theta -= (e.clientX-viz3.prevMx)*0.007;
+        viz3.phi = Math.max(0.08, Math.min(Math.PI-0.08, viz3.phi+(e.clientY-viz3.prevMy)*0.007));
+        _v3Cam();
+        viz3.prevMx=e.clientX; viz3.prevMy=e.clientY;
+    });
+    canvas.addEventListener('mouseup', ()=>viz3.isDragging=false);
+    canvas.addEventListener('mouseleave',()=>viz3.isDragging=false);
+    canvas.addEventListener('wheel', e=>{
+        e.preventDefault();
+        viz3.radius=Math.max(50,Math.min(800,viz3.radius+e.deltaY*0.35));
+        _v3Cam();
+    }, {passive:false});
+    canvas.addEventListener('click', e=>{
+        const rect=canvas.getBoundingClientRect();
+        viz3.mouse.x=((e.clientX-rect.left)/rect.width)*2-1;
+        viz3.mouse.y=-((e.clientY-rect.top)/rect.height)*2+1;
+        viz3.raycaster.setFromCamera(viz3.mouse,viz3.camera);
+        const allPlanes=viz3.layerGroups.flatMap(lg=>lg.planes);
+        const hits=viz3.raycaster.intersectObjects(allPlanes);
+        if (hits.length) _v3ShowHud(hits[0].object.userData);
+    });
+    new ResizeObserver(()=>{
+        if (!viz3.renderer) return;
+        viz3.camera.aspect=canvas.clientWidth/canvas.clientHeight;
+        viz3.camera.updateProjectionMatrix();
+        viz3.renderer.setSize(canvas.clientWidth,canvas.clientHeight);
+    }).observe(canvas.parentElement);
+
+    viz3.initialized = true;
+    _v3BuildScene(V3_SKELETON, []);
+    _v3Loop();
+}
+
+function _v3Cam() {
+    const {phi,theta,radius,target}=viz3;
+    viz3.camera.position.set(
+        target[0]+radius*Math.sin(phi)*Math.sin(theta),
+        target[1]+radius*Math.cos(phi),
+        target[2]+radius*Math.sin(phi)*Math.cos(theta)
+    );
+    viz3.camera.lookAt(target[0],target[1],target[2]);
+}
+
+function _v3Loop() {
+    requestAnimationFrame(_v3Loop);
+    if (viz3.autoRotating && !viz3.isDragging) {
+        viz3.theta += 0.004;
+        _v3Cam();
+    }
+    // Pulse emissive from gradient norms
+    const t=performance.now()*0.001, lossS=Math.min(1,viz3.currentLoss*0.4);
+    viz3.layerGroups.forEach(lg=>{
+        const gn=viz3.lastGradNorms[lg.meta.index]||0;
+        const pulse=0.5+0.5*Math.sin(t*(2+lossS*4)+lg.meta.index*0.5);
+        lg.edgeLines.forEach(el=>{ if(el.material) el.material.opacity=Math.max(0.1,gn*pulse*0.8+0.1); });
+    });
+    viz3.renderer && viz3.renderer.render(viz3.scene,viz3.camera);
+}
+
+// Build the full scene from a pipeline array
+function _v3BuildScene(pipeline, thumbsList) {
+    viz3.layerGroups.forEach(lg=>viz3.scene.remove(lg.group));
+    viz3.connLines.forEach(l=>viz3.scene.remove(l));
+    viz3.layerGroups=[]; viz3.connLines=[];
+
+    const N=pipeline.length;
+    if (!N) return;
+    const totalW=(N-1)*V3_GAP;
+    const startX=-totalW/2;
+
+    pipeline.forEach((stage,i)=>{
+        const x=startX+i*V3_GAP;
+        const thumbs=thumbsList[i]||[];
+        const lg=_v3LayerGroup(stage, x, thumbs);
+        viz3.scene.add(lg.group);
+        viz3.layerGroups.push(lg);
+    });
+
+    // Skip-connection arcs
+    pipeline.forEach((stage,i)=>{
+        (stage.from||[]).forEach(srcIdx=>{
+            if (Math.abs(i-srcIdx)<=1) return;
+            const src=viz3.layerGroups.find(l=>l.meta.index===srcIdx);
+            if (!src) return;
+            const x1=src.group.position.x, x2=startX+i*V3_GAP;
+            const arc=_v3Arc(x1,x2,Math.abs(x2-x1)*0.3,_v3c(stage.type));
+            viz3.scene.add(arc);
+            viz3.connLines.push(arc);
+        });
+    });
+
+    _setText('botLayers', N);
+    viz3.lastPipeline=pipeline;
+}
+
+function _v3LayerGroup(stage, x, thumbs) {
+    const sh=stage.shape||[1,16,64,64];
+    const C=sh[1]||16, H=sh[2]||64, W=sh[3]||64;
+    const dispW=Math.max(2,(W/320)*V3_BASE);
+    const dispH=Math.max(2,(H/320)*V3_BASE);
+    const numP=Math.min(C,V3_MAX_P);
+    const totalZ=(numP-1)*V3_PZGAP;
+    const accent=_v3c(stage.type);
+
+    const group=new THREE.Group();
+    group.position.set(x,0,0);
+    group.userData={idx:stage.index, name:stage.name, type:stage.type, shape:sh, C, H, W};
+
+    const planes=[], edgeLines=[];
+
+    for (let p=0; p<numP; p++) {
+        const z=p*V3_PZGAP-totalZ/2;
+        const baseOp=numP<=4?0.85:Math.max(0.18,0.85-p*0.02);
+
+        const geo=new THREE.PlaneGeometry(dispW,dispH);
+
+        // Apply real activation texture if available
+        const b64=thumbs[p];
+        let mat;
+        if (b64) {
+            const key=b64.slice(0,40);
+            if (!viz3.texCache[key]) {
+                const tex=new THREE.Texture();
+                tex.colorSpace=THREE.SRGBColorSpace;
+                const img=new Image();
+                img.onload=()=>{ tex.image=img; tex.needsUpdate=true; };
+                img.src='data:image/jpeg;base64,'+b64;
+                viz3.texCache[key]=tex;
+            }
+            mat=new THREE.MeshBasicMaterial({
+                map:viz3.texCache[b64.slice(0,40)],
+                transparent:true, opacity:baseOp,
+                side:THREE.DoubleSide, depthWrite:false
+            });
+        } else {
+            mat=new THREE.MeshBasicMaterial({
+                color:accent, transparent:true,
+                opacity:baseOp*0.28, side:THREE.DoubleSide, depthWrite:false
+            });
+        }
+
+        const plane=new THREE.Mesh(geo,mat);
+        plane.position.z=z;
+        plane.userData={idx:stage.index, name:stage.name, type:stage.type, shape:sh, C, H, W};
+        group.add(plane);
+        planes.push(plane);
+
+        // Glowing edge outline — creates the dramatic grid look
+        const eGeo=new THREE.EdgesGeometry(geo);
+        const eMat=new THREE.LineBasicMaterial({
+            color:accent, transparent:true,
+            opacity:Math.max(0.1,0.65-p*0.022)
+        });
+        const eLine=new THREE.LineSegments(eGeo,eMat);
+        eLine.position.z=z;
+        group.add(eLine);
+        edgeLines.push(eLine);
+    }
+
+    return {group, planes, edgeLines, meta:{...stage,C,H,W,dispW,dispH}};
+}
+
+function _v3Arc(x1,x2,h,color){
+    const pts=[];
+    for (let i=0;i<=24;i++){
+        const t=i/24;
+        pts.push(new THREE.Vector3(x1+(x2-x1)*t, Math.sin(Math.PI*t)*h+4, 0));
+    }
+    return new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(pts),
+        new THREE.LineBasicMaterial({color,transparent:true,opacity:0.55})
+    );
+}
+
+function _v3ShowHud(ud) {
+    if (!ud.idx && ud.idx!==0) return;
+    document.getElementById('hudLayerName').textContent=`#${ud.idx} ${ud.name||''}`;
+    document.getElementById('hudType').textContent=ud.type||'–';
+    document.getElementById('hudShape').textContent=(ud.shape||[]).join('×')||'–';
+    const gn=viz3.lastGradNorms[ud.idx];
+    document.getElementById('hudGrad').textContent=gn!=null?gn.toFixed(4):'–';
+    document.getElementById('hudActRange').textContent=`${ud.H}×${ud.W}, C=${ud.C}`;
+    document.getElementById('layerHud').style.display='block';
+}
+
+/* ── Called from WebSocket handler ── */
+function update3DPipelineWithRealData(frame) {
+    if (!viz3.initialized) return;
+    const pipeline=frame.pipeline||[];
+    if (!pipeline.length) return;
+
+    if (pipeline.length!==viz3.layerGroups.length) {
+        _v3BuildScene(pipeline, pipeline.map(s=>s.thumbs||[]));
+        return;
+    }
+    // In-place texture update
+    pipeline.forEach((stage,i)=>{
+        const lg=viz3.layerGroups[i];
+        if (!lg) return;
+        (stage.thumbs||[]).forEach((b64,p)=>{
+            if (!b64||!lg.planes[p]) return;
+            const key=b64.slice(0,40);
+            if (!viz3.texCache[key]){
+                const tex=new THREE.Texture();
+                tex.colorSpace=THREE.SRGBColorSpace;
+                const img=new Image();
+                img.onload=()=>{ tex.image=img; tex.needsUpdate=true; };
+                img.src='data:image/jpeg;base64,'+b64;
+                viz3.texCache[key]=tex;
+            }
+            const mat=lg.planes[p].material;
+            if (mat){
+                mat.map=viz3.texCache[key];
+                mat.color=new THREE.Color(0xffffff);
+                mat.needsUpdate=true;
+            }
+        });
+    });
+
+    // Sidebar confidence from frame.classes
+    _updateConfidence(frame.classes||[]);
+
+    // Metrics
+    const m=frame;
+    if (m.epoch!=null){ _setText('pipeEpoch',`${m.epoch}/${totalEpochs}`); _setText('botEpoch',`${m.epoch}/${totalEpochs}`); }
+    if (m.batch!=null)    _setText('pipeBatch',m.batch);
+    if (m.box_loss!=null){ const v=m.box_loss.toFixed(4); _setText('pipeBoxLoss',v); _setText('botLoss',v); }
+    if (m.cls_loss!=null) _setText('pipeClsLoss',m.cls_loss.toFixed(4));
+    if (m.dfl_loss!=null) _setText('pipeDflLoss',m.dfl_loss.toFixed(4));
+    if (m.map50!=null&&m.map50>0){ const v=m.map50.toFixed(3); _setText('pipeMap',v); _setText('botMap',v); }
+    if (m.lr!=null)       _setText('pipeLR',Number(m.lr).toExponential(2));
+    _setText('botLayers',viz3.layerGroups.length||'–');
+    viz3.currentLoss=(m.box_loss||0)+(m.cls_loss||0)+(m.dfl_loss||0);
+}
+
+function update3DGradNorms(gn) {
+    if (!viz3.initialized||!gn) return;
+    viz3.lastGradNorms=gn;
+    const idxs=Object.keys(gn).map(Number).sort((a,b)=>a-b);
+    const mx=Math.max(...Object.values(gn),1e-9);
+
+    viz3.layerGroups.forEach(({edgeLines,meta})=>{
+        const norm=(gn[meta.index]||0)/mx;
+        const col=new THREE.Color(norm*0.9+0.05, 0.04, (1-norm)*0.35+0.05);
+        edgeLines.forEach((el,p)=>{
+            if (el.material){
+                el.material.color=col;
+                el.material.opacity=Math.max(0.08,norm*0.75-p*0.018);
+            }
+        });
+    });
+
+    // Sidebar grad bars
+    const bars=document.getElementById('pipeGradBars');
+    const lbls=document.getElementById('pipeGradLabels');
+    if (bars){
+        bars.innerHTML=idxs.slice(0,40).map(i=>{
+            const pct=Math.max(4,Math.round((gn[i]/mx)*100));
+            return `<div class="grad-bar" style="height:${pct}%" title="L${i}:${gn[i].toFixed(3)}"></div>`;
+        }).join('');
+        lbls.innerHTML=idxs.slice(0,40).map(i=>`<div class="grad-lbl">${i}</div>`).join('');
+    }
+}
+
+function zoomIn()  { viz3.radius=Math.max(50,viz3.radius-20); _v3Cam(); }
+function zoomOut() { viz3.radius=Math.min(800,viz3.radius+20); _v3Cam(); }
+
+function resetPipelineView() {
+    viz3.phi=1.0; viz3.theta=-0.3; viz3.radius=320;
+    viz3.target.fill(0); _v3Cam();
+    document.getElementById('layerHud').style.display='none';
+}
+
+function toggleAutoRotate() {
+    viz3.autoRotating=!viz3.autoRotating;
+    const btn=document.getElementById('rotateBtn');
+    if (btn) btn.style.color=viz3.autoRotating?'#7c3aed':'';
+}
+
+/* Patch the live WebSocket handler */
+const _origHandleLiveEvent = handleLiveEvent;
+function handleLiveEvent(msg) {
+    _origHandleLiveEvent(msg);
+    if (msg.pipeline) {
+        const merged=Object.assign({},msg.frame||{},{pipeline:msg.pipeline});
+        update3DPipelineWithRealData(merged);
+    }
+    if (msg.grad_norms && Object.keys(msg.grad_norms).length) {
+        update3DGradNorms(msg.grad_norms);
+    }
+}
+
+
+
+// Initialize 3D scene when the tab is clicked
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    if (btn.dataset.tab === 'tab-3d') {
+        btn.addEventListener('click', () => setTimeout(init3D, 80));
+    }
+});
+
 document.addEventListener('DOMContentLoaded', () => {
-    initCharts(); chartsReady = true;   // metrics tab renders instantly now
+    initCharts(); chartsReady = true;
     connectSignalR();
     connectLiveWebSocket();
 });
+
+
 </script>
 }

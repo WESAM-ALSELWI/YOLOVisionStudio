@@ -191,6 +191,9 @@ namespace YOLOVisionStudio.Services
         Task<ExportResponse> ExportModel(ExportRequest request);
         Task<ArchitectureResponse> GetModelArchitecture(string yoloVersion, string modelSize);
         Task<AugmentationPreviewResponse> GetAugmentationPreview(AugmentationRequest request);
+        Task<GradCAMResponse> GenerateGradCAM(GradCAMRequest request);
+        Task<AttentionMapResponse> GenerateAttentionMaps(AttentionMapRequest request);
+        Task<WeightVisualization> VisualizeWeights(string modelPath, int layerIndex);
     }
 
     public class CachedModelInfo
@@ -198,5 +201,62 @@ namespace YOLOVisionStudio.Services
         [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
         [JsonPropertyName("size_mb")] public double SizeMb { get; set; }
         [JsonPropertyName("path")] public string Path { get; set; } = string.Empty;
+    }
+
+    // ----- Real XAI Visualization -----
+    public class GradCAMRequest
+    {
+        [JsonPropertyName("model_path")] public string ModelPath { get; set; } = string.Empty;
+        [JsonPropertyName("image_path")] public string? ImagePath { get; set; }
+        [JsonPropertyName("image_base64")] public string? ImageBase64 { get; set; }
+        [JsonPropertyName("target_layer")] public string TargetLayer { get; set; } = "model.22";
+        [JsonPropertyName("class_id")] public int? ClassId { get; set; }
+    }
+
+    public class GradCAMResponse
+    {
+        [JsonPropertyName("original_image_base64")] public string OriginalImageBase64 { get; set; } = string.Empty;
+        [JsonPropertyName("heatmap_base64")] public string HeatmapBase64 { get; set; } = string.Empty;
+        [JsonPropertyName("overlay_base64")] public string OverlayBase64 { get; set; } = string.Empty;
+        [JsonPropertyName("target_class")] public string? TargetClass { get; set; }
+        [JsonPropertyName("confidence")] public double? Confidence { get; set; }
+    }
+
+    public class AttentionMapRequest
+    {
+        [JsonPropertyName("model_path")] public string ModelPath { get; set; } = string.Empty;
+        [JsonPropertyName("image_path")] public string? ImagePath { get; set; }
+        [JsonPropertyName("image_base64")] public string? ImageBase64 { get; set; }
+    }
+
+    public class AttentionMapResponse
+    {
+        [JsonPropertyName("original_image_base64")] public string OriginalImageBase64 { get; set; } = string.Empty;
+        [JsonPropertyName("attention_maps")] public List<Dictionary<string, object>> AttentionMaps { get; set; } = new();
+        [JsonPropertyName("overlay_base64")] public string OverlayBase64 { get; set; } = string.Empty;
+    }
+
+    public class WeightVisualization
+    {
+        [JsonPropertyName("layer_index")] public int LayerIndex { get; set; }
+        [JsonPropertyName("layer_name")] public string LayerName { get; set; } = string.Empty;
+        [JsonPropertyName("weight_shape")] public List<int> WeightShape { get; set; } = new();
+        [JsonPropertyName("weights_base64")] public string WeightsBase64 { get; set; } = string.Empty;
+        [JsonPropertyName("weight_stats")] public Dictionary<string, double> WeightStats { get; set; } = new();
+        [JsonPropertyName("bias_base64")] public string? BiasBase64 { get; set; }
+    }
+
+    public class LayerStatistics
+    {
+        [JsonPropertyName("layer_index")] public int LayerIndex { get; set; }
+        [JsonPropertyName("layer_name")] public string LayerName { get; set; } = string.Empty;
+        [JsonPropertyName("layer_type")] public string LayerType { get; set; } = string.Empty;
+        [JsonPropertyName("mean")] public double Mean { get; set; }
+        [JsonPropertyName("std")] public double Std { get; set; }
+        [JsonPropertyName("min")] public double Min { get; set; }
+        [JsonPropertyName("max")] public double Max { get; set; }
+        [JsonPropertyName("sparsity")] public double Sparsity { get; set; }
+        [JsonPropertyName("dead_neurons")] public int DeadNeurons { get; set; }
+        [JsonPropertyName("grad_norm")] public double GradNorm { get; set; }
     }
 }

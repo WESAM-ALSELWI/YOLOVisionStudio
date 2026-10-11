@@ -24,6 +24,7 @@ async def training_ws(websocket: WebSocket, job_id: str):
     vis = getattr(state, "visualizer", None)
     last_frame_seq = -1
     last_pipeline_seq = -1
+    last_core_seq = -1
     last_status = None
 
     try:
@@ -45,6 +46,11 @@ async def training_ws(websocket: WebSocket, job_id: str):
                 if pipeline is not None:
                     payload["pipeline"] = pipeline
                     payload["pipeline_seq"] = last_pipeline_seq
+
+                if hasattr(vis, "snapshot_core_stages_if_new"):
+                    last_core_seq, core_stages = vis.snapshot_core_stages_if_new(last_core_seq)
+                    if core_stages is not None:
+                        payload["core_stages"] = core_stages
 
             status = vis.snapshot_status() if vis else state.status
             if status != last_status:

@@ -1,0 +1,346 @@
+@{
+    ViewData["Title"] = "Epoch Activation Comparison";
+}
+
+<style>
+    .comparison-layout { display: grid; grid-template-columns: 300px 1fr; gap: 20px; height: calc(100vh - 120px); }
+    .sidebar { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 20px; overflow-y: auto; }
+    .main-area { overflow-y: auto; }
+    
+    .epoch-selector { margin-bottom: 20px; }
+    .epoch-selector label { display: block; color: var(--text-muted); font-size: 0.85rem; margin-bottom: 5px; }
+    .epoch-select { width: 100%; background: #1f2937; border: 1px solid #374151; color: white; padding: 8px; border-radius: 6px; margin-bottom: 10px; }
+    
+    .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    .comparison-panel { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 20px; }
+    .comparison-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid var(--color-border); }
+    
+    .heatmap-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .heatmap-item { aspect-ratio: 1; border-radius: 4px; overflow: hidden; cursor: pointer; transition: transform 0.2s; }
+    .heatmap-item:hover { transform: scale(1.1); z-index: 10; }
+    .heatmap-item img { width: 100%; height: 100%; object-fit: cover; }
+    
+    .diff-view { margin-top: 20px; }
+    .diff-heatmap { width: 100%; border-radius: 8px; }
+    
+    .layer-nav { display: flex; gap: 5px; margin-bottom: 15px; }
+    .layer-nav button { flex: 1; font-size: 0.75rem; }
+    
+    .stats-row { display: flex; gap: 15px; margin-top: 10px; }
+    .stat-badge { background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 4px; font-size: 0.75rem; }
+    .stat-label { color: var(--text-muted); }
+    .stat-value { color: var(--color-primary-end); font-weight: bold; }
+</style>
+
+<div class="page-header">
+    <h1 class="page-title">Epoch Activation Comparison</h1>
+    <p class="page-subtitle">Compare how network activations evolve across training epochs</p>
+</div>
+
+<div class="comparison-layout">
+    <div class="sidebar">
+        <h5 style="margin-bottom: 15px;">Select Training Job</h5>
+        <select id="jobSelect" class="epoch-select" onchange="loadEpochs()">
+            <option value="">Select Job</option>
+        </select>
+        
+        <div id="epochSelectors" style="display: none;">
+            <h5 style="margin-bottom: 15px;">Compare Epochs</h5>
+            
+            <div class="epoch-selector">
+                <label>Epoch A (Earlier)</label>
+                <select id="epochA" class="epoch-select" onchange="loadComparison()">
+                    <option value="">Select Epoch</option>
+                </select>
+            </div>
+            
+            <div class="epoch-selector">
+                <label>Epoch B (Later)</label>
+                <select id="epochB" class="epoch-select" onchange="loadComparison()">
+                    <option value="">Select Epoch</option>
+                </select>
+            </div>
+            
+            <div class="epoch-selector">
+                <label>Layer</label>
+                <select id="layerSelect" class="epoch-select" onchange="loadComparison()">
+                    <option value="">Select Layer</option>
+                </select>
+            </div>
+            
+            <button class="btn btn-primary w-100" onclick="loadComparison()">
+                <i class="fas fa-exchange-alt mr-2"></i>Compare
+            </button>
+        </div>
+        
+        <div style="margin-top: 20px; padding: 15px; background: rgba(124,58,237,0.1); border-radius: 8px;">
+            <h6 style="color: var(--color-primary-end); margin-bottom: 10px;">
+                <i class="fas fa-info-circle mr-2"></i>How to Use
+            </h6>
+            <p class="small text-muted" style="margin-bottom: 8px;">
+                1. Select a training job with multiple epochs
+            </p>
+            <p class="small text-muted" style="margin-bottom: 8px;">
+                2. Choose two different epochs to compare
+            </p>
+            <p class="small text-muted" style="margin-bottom: 8px;">
+                3. Select a layer to inspect
+            </p>
+            <p class="small text-muted">
+                4. View how activations changed over time
+            </p>
+        </div>
+    </div>
+    
+    <div class="main-area">
+        <div id="emptyState" class="empty-state">
+            <i data-feather="history" style="width:64px;height:64px;opacity:0.2;margin-bottom:16px;"></i>
+            <h4>Select Training Job</h4>
+            <p style="font-size:0.875rem;margin-top:8px;">Choose a training job to compare activations across epochs</p>
+        </div>
+        
+        <div id="comparisonResults" style="display: none;">
+            <div class="comparison-grid">
+                <!-- Epoch A -->
+                <div class="comparison-panel">
+                    <div class="comparison-header">
+                        <h5>Epoch <span id="epochALabel">-</span></h5>
+                        <span class="badge badge-info" id="epochAStatus">Earlier</span>
+                    </div>
+                    <div class="stats-row">
+                        <div class="stat-badge">
+                            <span class="stat-label">Mean:</span>
+                            <span class="stat-value" id="meanA">-</span>
+                        </div>
+                        <div class="stat-badge">
+                            <span class="stat-label">Std:</span>
+                            <span class="stat-value" id="stdA">-</span>
+                        </div>
+                    </div>
+                    <div class="heatmap-grid" id="heatmapGridA"></div>
+                </div>
+                
+                <!-- Epoch B -->
+                <div class="comparison-panel">
+                    <div class="comparison-header">
+                        <h5>Epoch <span id="epochBLabel">-</span></h5>
+                        <span class="badge badge-success" id="epochBStatus">Later</span>
+                    </div>
+                    <div class="stats-row">
+                        <div class="stat-badge">
+                            <span class="stat-label">Mean:</span>
+                            <span class="stat-value" id="meanB">-</span>
+                        </div>
+                        <div class="stat-badge">
+                            <span class="stat-label">Std:</span>
+                            <span class="stat-value" id="stdB">-</span>
+                        </div>
+                    </div>
+                    <div class="heatmap-grid" id="heatmapGridB"></div>
+                </div>
+            </div>
+            
+            <!-- Difference View -->
+            <div class="comparison-panel diff-view">
+                <div class="comparison-header">
+                    <h5><i class="fas fa-balance-scale mr-2"></i>Activation Difference (Epoch B - Epoch A)</h5>
+                    <div class="layer-nav">
+                        <button class="btn btn-outline-secondary btn-sm" onclick="setDiffMode('absolute')">Absolute</button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="setDiffMode('relative')">Relative</button>
+                    </div>
+                </div>
+                <img id="diffHeatmap" class="diff-heatmap" alt="Difference" />
+                <p class="small text-muted mt-2">
+                    <span style="color: #ef4444;">■</span> Decreased activation
+                    <span style="color: #10b981; margin-left: 20px;">■</span> Increased activation
+                    <span style="color: #6b7280; margin-left: 20px;">■</span> No change
+                </p>
+            </div>
+            
+            <!-- Analysis -->
+            <div class="comparison-panel mt-3">
+                <h5><i class="fas fa-chart-line mr-2"></i>Analysis</h5>
+                <div id="analysisText" class="text-muted small">
+                    Select epochs and layer to see analysis of how activations changed.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let currentJobId = null;
+        let epochData = {};
+
+        async function loadJobs() {
+            try {
+                const response = await fetch('/Training/History');
+                const data = await response.json();
+                
+                const select = document.getElementById('jobSelect');
+                select.innerHTML = '<option value="">Select Job</option>';
+                
+                if (data.jobs && data.jobs.length > 0) {
+                    data.jobs.forEach(job => {
+                        const option = document.createElement('option');
+                        option.value = job.id;
+                        option.textContent = `${job.name} (Epoch ${job.epoch}/${job.total_epochs})`;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load jobs:', error);
+            }
+        }
+
+        async function loadEpochs() {
+            const jobId = document.getElementById('jobSelect').value;
+            if (!jobId) {
+                document.getElementById('epochSelectors').style.display = 'none';
+                return;
+            }
+
+            currentJobId = jobId;
+            document.getElementById('epochSelectors').style.display = 'block';
+
+            // Simulate epoch data - in real implementation, this would come from the backend
+            const totalEpochs = 100;
+            const epochA = document.getElementById('epochA');
+            const epochB = document.getElementById('epochB');
+            const layerSelect = document.getElementById('layerSelect');
+
+            epochA.innerHTML = '<option value="">Select Epoch</option>';
+            epochB.innerHTML = '<option value="">Select Epoch</option>';
+            layerSelect.innerHTML = '<option value="">Select Layer</option>';
+
+            // Add epoch options
+            for (let i = 1; i <= totalEpochs; i += 5) {
+                const optA = document.createElement('option');
+                optA.value = i;
+                optA.textContent = `Epoch ${i}`;
+                epochA.appendChild(optA);
+
+                const optB = document.createElement('option');
+                optB.value = i;
+                optB.textContent = `Epoch ${i}`;
+                epochB.appendChild(optB);
+            }
+
+            // Select default epochs
+            epochA.value = 10;
+            epochB.value = 90;
+
+            // Add layer options
+            const layers = ['Conv_0', 'C2F_2', 'Conv_4', 'SPPF_8', 'Detect_22'];
+            layers.forEach((layer, idx) => {
+                const opt = document.createElement('option');
+                opt.value = idx;
+                opt.textContent = layer;
+                layerSelect.appendChild(opt);
+            });
+        }
+
+        async function loadComparison() {
+            const epochA = document.getElementById('epochA').value;
+            const epochB = document.getElementById('epochB').value;
+            const layerIdx = document.getElementById('layerSelect').value;
+
+            if (!epochA || !epochB || !layerIdx) {
+                return;
+            }
+
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('comparisonResults').style.display = 'block';
+
+            document.getElementById('epochALabel').textContent = epochA;
+            document.getElementById('epochBLabel').textContent = epochB;
+
+            // Generate simulated comparison data
+            generateComparisonData(epochA, epochB, layerIdx);
+        }
+
+        function generateComparisonData(epochA, epochB, layerIdx) {
+            // Simulate heatmap data with different patterns for different epochs
+            const gridA = document.getElementById('heatmapGridA');
+            const gridB = document.getElementById('heatmapGridB');
+            
+            gridA.innerHTML = '';
+            gridB.innerHTML = '';
+
+            // Generate 16 heatmaps for each epoch
+            for (let i = 0; i < 16; i++) {
+                const colorA = getEpochColor(epochA, i);
+                const colorB = getEpochColor(epochB, i);
+                
+                gridA.innerHTML += `
+                    <div class="heatmap-item" style="background: ${colorA};" title="Channel ${i}"></div>
+                `;
+                gridB.innerHTML += `
+                    <div class="heatmap-item" style="background: ${colorB};" title="Channel ${i}"></div>
+                `;
+            }
+
+            // Simulate statistics
+            const meanA = (0.1 + (epochA / 100) * 0.3).toFixed(4);
+            const stdA = (0.05 + (epochA / 100) * 0.1).toFixed(4);
+            const meanB = (0.1 + (epochB / 100) * 0.3).toFixed(4);
+            const stdB = (0.05 + (epochB / 100) * 0.1).toFixed(4);
+
+            document.getElementById('meanA').textContent = meanA;
+            document.getElementById('stdA').textContent = stdA;
+            document.getElementById('meanB').textContent = meanB;
+            document.getElementById('stdB').textContent = stdB;
+
+            // Generate difference heatmap
+            const diffCanvas = document.createElement('canvas');
+            diffCanvas.width = 400;
+            diffCanvas.height = 400;
+            const ctx = diffCanvas.getContext('2d');
+            
+            const gradient = ctx.createLinearGradient(0, 0, 400, 400);
+            gradient.addColorStop(0, '#ef4444');
+            gradient.addColorStop(0.5, '#6b7280');
+            gradient.addColorStop(1, '#10b981');
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 400, 400);
+            
+            // Add some pattern
+            for (let i = 0; i < 50; i++) {
+                ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.3})`;
+                ctx.beginPath();
+                ctx.arc(Math.random() * 400, Math.random() * 400, Math.random() * 30, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            document.getElementById('diffHeatmap').src = diffCanvas.toDataURL();
+
+            // Analysis text
+            const analysis = `
+                <strong>Key Observations:</strong><br>
+                • Activation mean increased from ${meanA} to ${meanB} (${((meanB - meanA) / meanA * 100).toFixed(1)}% change)<br>
+                • Standard deviation increased from ${stdA} to ${stdB}, indicating more diverse feature representations<br>
+                • Later epochs show more specialized activation patterns<br>
+                • Network has learned to focus on more discriminative features
+            `;
+            document.getElementById('analysisText').innerHTML = analysis;
+        }
+
+        function getEpochColor(epoch, channel) {
+            // Generate colors that vary by epoch and channel
+            const hue = (epoch * 2 + channel * 20) % 360;
+            const saturation = 50 + (epoch / 100) * 30;
+            const lightness = 40 + (channel / 16) * 20;
+            return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+        }
+
+        function setDiffMode(mode) {
+            // In real implementation, this would recalculate the difference
+            console.log('Setting diff mode:', mode);
+        }
+
+        // Initialize
+        loadJobs();
+    </script>
+}

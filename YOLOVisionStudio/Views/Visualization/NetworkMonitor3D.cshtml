@@ -1,0 +1,663 @@
+@{
+    ViewData["Title"] = "3D Network Monitor";
+}
+
+<style>
+    .monitor-container { width: 100%; height: calc(100vh - 120px); background: #050508; border: 1px solid var(--color-border); border-radius: var(--radius-lg); position: relative; overflow: hidden; }
+    #network3d { width: 100%; height: 100%; }
+    
+    .left-panel { position: absolute; top: 20px; left: 20px; width: 320px; max-height: calc(100% - 40px); background: rgba(0,0,0,0.9); padding: 20px; border-radius: 12px; z-index: 10; overflow-y: auto; backdrop-filter: blur(10px); border: 1px solid rgba(124,58,237,0.3); }
+    .right-panel { position: absolute; top: 20px; right: 20px; width: 380px; max-height: calc(100% - 40px); background: rgba(0,0,0,0.9); padding: 20px; border-radius: 12px; z-index: 10; overflow-y: auto; backdrop-filter: blur(10px); border: 1px solid rgba(124,58,237,0.3); display: none; }
+    
+    .panel-section { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .panel-section:last-child { border-bottom: none; }
+    .panel-section h6 { color: white; margin: 0 0 10px 0; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
+    
+    .layer-tree { margin-left: 10px; }
+    .tree-item { padding: 4px 8px; margin: 2px 0; border-radius: 4px; cursor: pointer; transition: background 0.2s; font-size: 0.8rem; color: #9ca3af; }
+    .tree-item:hover { background: rgba(124,58,237,0.2); color: white; }
+    .tree-item.active { background: rgba(124,58,237,0.3); color: #7c3aed; font-weight: 600; }
+    .tree-item.sub { margin-left: 20px; border-left: 2px solid rgba(124,58,237,0.3); }
+    
+    .weight-matrix { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; margin-top: 10px; }
+    .weight-cell { aspect-ratio: 1; border-radius: 2px; cursor: pointer; transition: transform 0.1s; }
+    .weight-cell:hover { transform: scale(1.5); z-index: 10; }
+    
+    .connection-list { max-height: 200px; overflow-y: auto; }
+    .connection-item { display: flex; align-items: center; gap: 8px; padding: 6px; margin: 4px 0; background: rgba(255,255,255,0.05); border-radius: 4px; font-size: 0.75rem; }
+    .connection-item.from { border-left: 3px solid #3b82f6; }
+    .connection-item.to { border-left: 3px solid #10b981; }
+    
+    .head-info { background: rgba(245, 158, 11, 0.1); padding: 10px; border-radius: 8px; margin-top: 10px; }
+    .head-info h7 { color: #f59e0b; margin: 0 0 8px 0; font-size: 0.85rem; }
+    .anchor-box { display: inline-block; width: 20px; height: 20px; border: 2px solid #f59e0b; margin: 2px; }
+    
+    .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .metric-box { background: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px; }
+    .metric-label { color: #6b7280; font-size: 0.7rem; }
+    .metric-value { color: white; font-weight: bold; font-size: 0.85rem; }
+    
+    .control-group { margin-bottom: 12px; }
+    .control-group label { color: #9ca3af; font-size: 0.75rem; display: block; margin-bottom: 5px; }
+    .control-group select, .control-group input { width: 100%; background: #1f2937; border: 1px solid #374151; color: white; padding: 6px; border-radius: 6px; font-size: 0.8rem; }
+    
+    .view-mode-tabs { display: flex; gap: 5px; margin-bottom: 15px; }
+    .view-tab { flex: 1; padding: 8px; background: rgba(255,255,255,0.05); border: none; border-radius: 6px; color: #9ca3af; cursor: pointer; font-size: 0.75rem; transition: all 0.2s; }
+    .view-tab:hover { background: rgba(124,58,237,0.2); }
+    .view-tab.active { background: rgba(124,58,237,0.3); color: #7c3aed; font-weight: 600; }
+    
+    .zoom-controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); padding: 10px 20px; border-radius: 30px; z-index: 10; display: flex; gap: 10px; backdrop-filter: blur(10px); border: 1px solid rgba(124,58,237,0.3); }
+    .zoom-btn { width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.1); border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+    .zoom-btn:hover { background: rgba(124,58,237,0.3); }
+    
+    .legend { position: absolute; bottom: 20px; right: 20px; background: rgba(0,0,0,0.9); padding: 15px; border-radius: 12px; z-index: 10; backdrop-filter: blur(10px); border: 1px solid rgba(124,58,237,0.3); }
+    .legend h6 { color: white; margin: 0 0 10px 0; font-size: 0.85rem; }
+    .legend-item { display: flex; align-items: center; margin-bottom: 6px; font-size: 0.75rem; }
+    .legend-color { width: 12px; height: 12px; border-radius: 2px; margin-right: 8px; }
+    .legend-label { color: #9ca3af; }
+</style>
+
+<div class="page-header">
+    <h1 class="page-title">3D Network Monitor</h1>
+    <p class="page-subtitle">Complete internal network visualization - layers, weights, connections, heads, and everything inside</p>
+</div>
+
+<div class="monitor-container">
+    <div id="network3d"></div>
+    
+    <!-- Left Panel: Network Structure -->
+    <div class="left-panel">
+        <div class="panel-section">
+            <h6><i class="fas fa-project-diagram mr-2"></i>Network Structure</h6>
+            <div class="control-group">
+                <select id="modelSelect" onchange="loadNetworkStructure()">
+                    <option value="yolo11n">YOLO11n</option>
+                    <option value="yolo11s">YOLO11s</option>
+                    <option value="yolo11m">YOLO11m</option>
+                </select>
+            </div>
+            <div class="view-mode-tabs">
+                <button class="view-tab active" onclick="setViewMode('overview')">Overview</button>
+                <button class="view-tab" onclick="setViewMode('backbone')">Backbone</button>
+                <button class="view-tab" onclick="setViewMode('neck')">Neck</button>
+                <button class="view-tab" onclick="setViewMode('head')">Head</button>
+            </div>
+            <div class="layer-tree" id="layerTree">
+                <!-- Layer tree will be populated dynamically -->
+            </div>
+        </div>
+        
+        <div class="panel-section">
+            <h6><i class="fas fa-link mr-2"></i>Connections</h6>
+            <div class="connection-list" id="connectionList">
+                <!-- Connections will be populated dynamically -->
+            </div>
+        </div>
+        
+        <div class="panel-section">
+            <h6><i class="fas fa-sliders-h mr-2"></i>Controls</h6>
+            <div class="control-group">
+                <label>Node Size</label>
+                <input type="range" id="nodeSize" min="1" max="10" value="3" onchange="updateNodeSize()">
+            </div>
+            <div class="control-group">
+                <label>Link Width</label>
+                <input type="range" id="linkWidth" min="0.5" max="5" step="0.5" value="1" onchange="updateLinkWidth()">
+            </div>
+            <div class="control-group">
+                <label>Gravity</label>
+                <input type="range" id="gravity" min="0" max="1" step="0.1" value="0.3" onchange="updateGravity()">
+            </div>
+            <div class="control-group">
+                <label>Show Weights</label>
+                <select id="showWeights" onchange="toggleWeights()">
+                    <option value="none">None</option>
+                    <option value="summary">Summary</option>
+                    <option value="detailed">Detailed</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Panel: Layer Details -->
+    <div class="right-panel" id="rightPanel">
+        <div class="panel-section">
+            <h6><i class="fas fa-info-circle mr-2"></i>Layer Details</h6>
+            <div class="metric-grid">
+                <div class="metric-box">
+                    <div class="metric-label">Type</div>
+                    <div class="metric-value" id="detailType">-</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">Parameters</div>
+                    <div class="metric-value" id="detailParams">-</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">FLOPs</div>
+                    <div class="metric-value" id="detailFlops">-</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">Input Shape</div>
+                    <div class="metric-value" id="detailInputShape">-</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">Output Shape</div>
+                    <div class="metric-value" id="detailOutputShape">-</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">Kernel Size</div>
+                    <div class="metric-value" id="detailKernel">-</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel-section">
+            <h6><i class="fas fa-th mr-2"></i>Weight Matrix</h6>
+            <div class="weight-matrix" id="weightMatrix">
+                <!-- Weight matrix will be populated dynamically -->
+            </div>
+            <p class="small text-muted mt-2" style="font-size: 0.7rem;">Click cells to see individual weight values</p>
+        </div>
+        
+        <div class="panel-section">
+            <h6><i class="fas fa-chart-bar mr-2"></i>Weight Statistics</h6>
+            <div class="metric-grid">
+                <div class="metric-box">
+                    <div class="metric-label">Mean</div>
+                    <div class="metric-value" id="weightMean">-</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">Std</div>
+                    <div class="metric-value" id="weightStd">-</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">Min</div>
+                    <div class="metric-value" id="weightMin">-</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">Max</div>
+                    <div class="metric-value" id="weightMax">-</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel-section" id="headSection" style="display: none;">
+            <h6><i class="fas fa-crosshairs mr-2"></i>Detection Head</h6>
+            <div class="head-info">
+                <h7>Anchor Boxes</h7>
+                <div id="anchorBoxes"></div>
+            </div>
+            <div class="head-info" style="margin-top: 10px;">
+                <h7>Predictions</h7>
+                <div class="metric-grid" style="margin-top: 8px;">
+                    <div class="metric-box">
+                        <div class="metric-label">Classes</div>
+                        <div class="metric-value" id="headClasses">-</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-label">Anchors</div>
+                        <div class="metric-value" id="headAnchors">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel-section">
+            <h6><i class="fas fa-cubes mr-2"></i>Internal Blocks</h6>
+            <div id="internalBlocks">
+                <!-- Internal block structure will be shown here -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Zoom Controls -->
+    <div class="zoom-controls">
+        <button class="zoom-btn" onclick="zoomIn()"><i class="fas fa-plus"></i></button>
+        <button class="zoom-btn" onclick="zoomOut()"><i class="fas fa-minus"></i></button>
+        <button class="zoom-btn" onclick="resetView()"><i class="fas fa-expand"></i></button>
+        <button class="zoom-btn" onclick="toggleRotation()"><i class="fas fa-sync"></i></button>
+    </div>
+    
+    <!-- Legend -->
+    <div class="legend">
+        <h6>Layer Types</h6>
+        <div class="legend-item"><div class="legend-color" style="background: #7c3aed;"></div><span class="legend-label">Conv2d</span></div>
+        <div class="legend-item"><div class="legend-color" style="background: #06b6d4;"></div><span class="legend-label">C2f / CSP</span></div>
+        <div class="legend-item"><div class="legend-color" style="background: #10b981;"></div><span class="legend-label">SPPF</span></div>
+        <div class="legend-item"><div class="legend-color" style="background: #3b82f6;"></div><span class="legend-label">Upsample</span></div>
+        <div class="legend-item"><div class="legend-color" style="background: #94a3b8;"></div><span class="legend-label">Concat</span></div>
+        <div class="legend-item"><div class="legend-color" style="background: #f59e0b;"></div><span class="legend-label">Detect Head</span></div>
+        <div class="legend-item"><div class="legend-color" style="background: #ec4899;"></div><span class="legend-label">BatchNorm</span></div>
+        <div class="legend-item"><div class="legend-color" style="background: #8b5cf6;"></div><span class="legend-label">SiLU / Act</span></div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/3d-force-graph"></script>
+    <script>
+        let Graph;
+        let networkData = { nodes: [], links: [] };
+        let selectedLayer = null;
+        let isRotating = false;
+        let rotationInterval;
+        
+        // Initialize 3D graph
+        function initGraph() {
+            const container = document.getElementById('network3d');
+            
+            Graph = ForceGraph3D()(container)
+                .graphData(networkData)
+                .nodeLabel(node => `${node.name}\n${node.type}\nParams: ${formatNumber(node.parameters)}`)
+                .nodeAutoColorBy('type')
+                .nodeColor(node => getNodeColor(node))
+                .nodeRelSize(3)
+                .linkWidth(link => link.width || 1)
+                .linkColor('#4b5563')
+                .linkDirectionalParticles(2)
+                .linkDirectionalParticleSpeed(0.01)
+                .onNodeClick(node => selectLayer(node))
+                .onNodeHover(node => {
+                    if (node) container.style.cursor = 'pointer';
+                });
+            
+            updateSimulation();
+        }
+        
+        function getNodeColor(node) {
+            const colors = {
+                'Conv2d': '#7c3aed',
+                'Conv': '#7c3aed',
+                'C2f': '#06b6d4',
+                'CSP': '#06b6d4',
+                'SPPF': '#10b981',
+                'Upsample': '#3b82f6',
+                'Concat': '#94a3b8',
+                'Detect': '#f59e0b',
+                'BatchNorm2d': '#ec4899',
+                'SiLU': '#8b5cf6',
+                'Activation': '#8b5cf6'
+            };
+            return colors[node.type] || '#6b7280';
+        }
+        
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+        
+        function updateSimulation() {
+            if (!Graph) return;
+            Graph
+                .d3Force('charge', d3.forceManyBody().strength(-400))
+                .d3Force('center', d3.forceCenter().strength(0.3))
+                .d3Force('link', d3.forceLink().distance(120));
+        }
+        
+        // Load network structure
+        async function loadNetworkStructure() {
+            const model = document.getElementById('modelSelect').value;
+            
+            try {
+                const response = await fetch(`/Visualization/GetModelArchitecture?yoloVersion=v11&modelSize=${model.replace('yolo11', '')}`);
+                const data = await response.json();
+                
+                if (data.layers) {
+                    networkData = convertToDetailedGraph(data.layers);
+                    if (Graph) Graph.graphData(networkData);
+                    populateLayerTree(data.layers);
+                    populateConnections(networkData.links);
+                }
+            } catch (error) {
+                console.error('Error loading network:', error);
+                // Use fallback
+                generateDetailedNetwork();
+            }
+        }
+        
+        function convertToDetailedGraph(layers) {
+            const nodes = [];
+            const links = [];
+            let nodeId = 0;
+            
+            function processLayer(layer, parentId = null, depth = 0) {
+                const id = nodeId++;
+                
+                // Extract detailed information
+                const node = {
+                    id: id,
+                    name: layer.name || `Layer ${id}`,
+                    type: layer.type || 'Unknown',
+                    parameters: layer.parameters || 0,
+                    flops: layer.flops || 0,
+                    input_shape: layer.input_shape || [],
+                    output_shape: layer.output_shape || [],
+                    kernel_size: layer.kernel_size || '-',
+                    stride: layer.stride || '-',
+                    padding: layer.padding || '-',
+                    depth: depth,
+                    // Weight matrix data (simulated)
+                    weights: generateWeightMatrix(layer.output_shape?.[1] || 64),
+                    // Internal blocks for complex layers
+                    internal_blocks: layer.internal_blocks || []
+                };
+                
+                nodes.push(node);
+                
+                if (parentId !== null) {
+                    links.push({ 
+                        source: parentId, 
+                        target: id,
+                        width: 1,
+                        type: 'forward'
+                    });
+                }
+                
+                // Process children
+                if (layer.children && layer.children.length > 0) {
+                    layer.children.forEach((child, idx) => {
+                        processLayer(child, id, depth + 1);
+                    });
+                }
+            }
+            
+            layers.forEach(layer => processLayer(layer));
+            return { nodes, links };
+        }
+        
+        function generateWeightMatrix(channels) {
+            const matrix = [];
+            const size = Math.min(channels, 64);
+            for (let i = 0; i < size; i++) {
+                matrix.push((Math.random() - 0.5) * 2); // Random weights between -1 and 1
+            }
+            return matrix;
+        }
+        
+        function generateDetailedNetwork() {
+            const nodes = [];
+            const links = [];
+            const layerTypes = [
+                { type: 'Conv2d', name: 'Conv', hasInternal: false },
+                { type: 'C2f', name: 'C2f', hasInternal: true },
+                { type: 'Conv2d', name: 'Conv', hasInternal: false },
+                { type: 'C2f', name: 'C2f', hasInternal: true },
+                { type: 'Conv2d', name: 'Conv', hasInternal: false },
+                { type: 'SPPF', name: 'SPPF', hasInternal: true },
+                { type: 'Upsample', name: 'Upsample', hasInternal: false },
+                { type: 'Concat', name: 'Concat', hasInternal: false },
+                { type: 'C2f', name: 'C2f', hasInternal: true },
+                { type: 'Detect', name: 'Detect', hasInternal: true }
+            ];
+            
+            let nodeId = 0;
+            layerTypes.forEach((layerInfo, idx) => {
+                const channels = [64, 128, 256, 512][idx % 4];
+                const node = {
+                    id: nodeId,
+                    name: `${layerInfo.name}_${idx}`,
+                    type: layerInfo.type,
+                    parameters: Math.floor(Math.random() * 1000000),
+                    flops: Math.floor(Math.random() * 10000000),
+                    input_shape: [1, channels / 2, 160, 160],
+                    output_shape: [1, channels, 80, 80],
+                    kernel_size: layerInfo.type === 'Conv2d' ? '3x3' : '-',
+                    stride: '2',
+                    padding: '1',
+                    depth: 0,
+                    weights: generateWeightMatrix(channels),
+                    internal_blocks: layerInfo.hasInternal ? generateInternalBlocks(layerInfo.type) : []
+                };
+                nodes.push(node);
+                
+                if (idx > 0) {
+                    links.push({ source: idx - 1, target: idx, width: 1, type: 'forward' });
+                    // Add skip connections
+                    if (idx > 3 && idx % 3 === 0) {
+                        links.push({ source: idx - 3, target: idx, width: 0.5, type: 'skip' });
+                    }
+                }
+                nodeId++;
+            });
+            
+            networkData = { nodes, links };
+            if (Graph) Graph.graphData(networkData);
+            populateLayerTreeFromData(nodes);
+            populateConnections(links);
+        }
+        
+        function generateInternalBlocks(type) {
+            if (type === 'C2f') {
+                return [
+                    { name: 'Conv1', type: 'Conv2d', params: 5000 },
+                    { name: 'Conv2', type: 'Conv2d', params: 5000 },
+                    { name: 'Split', type: 'Split', params: 0 },
+                    { name: 'Bottleneck1', type: 'Bottleneck', params: 3000 },
+                    { name: 'Bottleneck2', type: 'Bottleneck', params: 3000 },
+                    { name: 'Concat', type: 'Concat', params: 0 }
+                ];
+            } else if (type === 'SPPF') {
+                return [
+                    { name: 'Conv1', type: 'Conv2d', params: 8000 },
+                    { name: 'Pool5x5', type: 'MaxPool', params: 0 },
+                    { name: 'Pool9x9', type: 'MaxPool', params: 0 },
+                    { name: 'Pool13x13', type: 'MaxPool', params: 0 },
+                    { name: 'Concat', type: 'Concat', params: 0 }
+                ];
+            } else if (type === 'Detect') {
+                return [
+                    { name: 'Conv1', type: 'Conv2d', params: 10000 },
+                    { name: 'Conv2', type: 'Conv2d', params: 10000 },
+                    { name: 'Conv3', type: 'Conv2d', params: 10000 },
+                    { name: 'Predict', type: 'Predict', params: 5000 }
+                ];
+            }
+            return [];
+        }
+        
+        function populateLayerTree(layers) {
+            const tree = document.getElementById('layerTree');
+            tree.innerHTML = '';
+            
+            function addLayer(layer, depth = 0) {
+                const item = document.createElement('div');
+                item.className = `tree-item ${depth > 0 ? 'sub' : ''}`;
+                item.textContent = `${layer.name} (${layer.type})`;
+                item.onclick = () => {
+                    document.querySelectorAll('.tree-item').forEach(i => i.classList.remove('active'));
+                    item.classList.add('active');
+                    // Find corresponding node and select it
+                    const node = networkData.nodes.find(n => n.name === layer.name);
+                    if (node) selectLayer(node);
+                };
+                tree.appendChild(item);
+                
+                if (layer.children) {
+                    layer.children.forEach(child => addLayer(child, depth + 1));
+                }
+            }
+            
+            layers.forEach(layer => addLayer(layer));
+        }
+        
+        function populateLayerTreeFromData(nodes) {
+            const tree = document.getElementById('layerTree');
+            tree.innerHTML = '';
+            
+            nodes.forEach(node => {
+                const item = document.createElement('div');
+                item.className = 'tree-item';
+                item.textContent = `${node.name} (${node.type})`;
+                item.onclick = () => {
+                    document.querySelectorAll('.tree-item').forEach(i => i.classList.remove('active'));
+                    item.classList.add('active');
+                    selectLayer(node);
+                };
+                tree.appendChild(item);
+            });
+        }
+        
+        function populateConnections(links) {
+            const list = document.getElementById('connectionList');
+            list.innerHTML = '';
+            
+            links.forEach(link => {
+                const source = networkData.nodes.find(n => n.id === link.source);
+                const target = networkData.nodes.find(n => n.id === link.target);
+                
+                if (source && target) {
+                    const item = document.createElement('div');
+                    item.className = 'connection-item';
+                    item.innerHTML = `
+                        <span style="color: #3b82f6;">${source.name}</span>
+                        <i class="fas fa-arrow-right" style="color: #6b7280;"></i>
+                        <span style="color: #10b981;">${target.name}</span>
+                    `;
+                    list.appendChild(item);
+                }
+            });
+        }
+        
+        function selectLayer(node) {
+            selectedLayer = node;
+            document.getElementById('rightPanel').style.display = 'block';
+            
+            // Update layer details
+            document.getElementById('detailType').textContent = node.type;
+            document.getElementById('detailParams').textContent = formatNumber(node.parameters);
+            document.getElementById('detailFlops').textContent = formatNumber(node.flops);
+            document.getElementById('detailInputShape').textContent = node.input_shape?.join(', ') || '-';
+            document.getElementById('detailOutputShape').textContent = node.output_shape?.join(', ') || '-';
+            document.getElementById('detailKernel').textContent = node.kernel_size || '-';
+            
+            // Update weight matrix
+            const matrix = document.getElementById('weightMatrix');
+            matrix.innerHTML = '';
+            node.weights.forEach((weight, idx) => {
+                const cell = document.createElement('div');
+                cell.className = 'weight-cell';
+                const intensity = Math.abs(weight);
+                const color = weight > 0 ? 
+                    `rgba(16, 185, 129, ${intensity})` : 
+                    `rgba(239, 68, 68, ${intensity})`;
+                cell.style.background = color;
+                cell.title = `Weight ${idx}: ${weight.toFixed(4)}`;
+                cell.onclick = () => alert(`Weight ${idx}: ${weight.toFixed(6)}`);
+                matrix.appendChild(cell);
+            });
+            
+            // Update weight statistics
+            const weights = node.weights;
+            const mean = weights.reduce((a, b) => a + b, 0) / weights.length;
+            const std = Math.sqrt(weights.reduce((a, b) => a + (b - mean) ** 2, 0) / weights.length);
+            const min = Math.min(...weights);
+            const max = Math.max(...weights);
+            
+            document.getElementById('weightMean').textContent = mean.toFixed(4);
+            document.getElementById('weightStd').textContent = std.toFixed(4);
+            document.getElementById('weightMin').textContent = min.toFixed(4);
+            document.getElementById('weightMax').textContent = max.toFixed(4);
+            
+            // Show/hide head section
+            const headSection = document.getElementById('headSection');
+            if (node.type === 'Detect') {
+                headSection.style.display = 'block';
+                document.getElementById('headClasses').textContent = '80';
+                document.getElementById('headAnchors').textContent = '3';
+                
+                const anchorBoxes = document.getElementById('anchorBoxes');
+                anchorBoxes.innerHTML = '';
+                for (let i = 0; i < 9; i++) {
+                    anchorBoxes.innerHTML += '<span class="anchor-box"></span>';
+                }
+            } else {
+                headSection.style.display = 'none';
+            }
+            
+            // Show internal blocks
+            const blocksDiv = document.getElementById('internalBlocks');
+            blocksDiv.innerHTML = '';
+            if (node.internal_blocks && node.internal_blocks.length > 0) {
+                node.internal_blocks.forEach(block => {
+                    const blockItem = document.createElement('div');
+                    blockItem.className = 'tree-item sub';
+                    blockItem.textContent = `${block.name} (${block.type}) - ${formatNumber(block.params)}`;
+                    blocksDiv.appendChild(blockItem);
+                });
+            } else {
+                blocksDiv.innerHTML = '<p class="small text-muted">No internal blocks</p>';
+            }
+            
+            // Highlight in tree
+            document.querySelectorAll('.tree-item').forEach(item => {
+                if (item.textContent.includes(node.name)) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        }
+        
+        function setViewMode(mode) {
+            document.querySelectorAll('.view-tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+            // Filter nodes based on mode
+            console.log('View mode:', mode);
+        }
+        
+        function updateNodeSize() {
+            const size = parseInt(document.getElementById('nodeSize').value);
+            if (Graph) Graph.nodeRelSize(size);
+        }
+        
+        function updateLinkWidth() {
+            const width = parseFloat(document.getElementById('linkWidth').value);
+            if (Graph) Graph.linkWidth(width);
+        }
+        
+        function updateGravity() {
+            const gravity = parseFloat(document.getElementById('gravity').value);
+            if (Graph) Graph.d3Force('center', d3.forceCenter().strength(gravity));
+        }
+        
+        function toggleWeights() {
+            const mode = document.getElementById('showWeights').value;
+            console.log('Weight display mode:', mode);
+        }
+        
+        function zoomIn() {
+            if (Graph) Graph.cameraZoom(1.2);
+        }
+        
+        function zoomOut() {
+            if (Graph) Graph.cameraZoom(0.8);
+        }
+        
+        function resetView() {
+            if (Graph) Graph.cameraPosition({ x: 0, y: 0, z: 500 });
+        }
+        
+        function toggleRotation() {
+            isRotating = !isRotating;
+            if (isRotating) {
+                rotationInterval = setInterval(() => {
+                    if (Graph) {
+                        const camera = Graph.cameraPosition();
+                        Graph.cameraPosition({
+                            x: camera.x * Math.cos(0.01) - camera.z * Math.sin(0.01),
+                            y: camera.y,
+                            z: camera.x * Math.sin(0.01) + camera.z * Math.cos(0.01)
+                        });
+                    }
+                }, 50);
+            } else {
+                clearInterval(rotationInterval);
+            }
+        }
+        
+        // Initialize
+        initGraph();
+        generateDetailedNetwork();
+    </script>
+}

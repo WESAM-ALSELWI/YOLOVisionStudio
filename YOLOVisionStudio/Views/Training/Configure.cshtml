@@ -32,8 +32,35 @@
     </div>
 </div>
 
+@if (TempData["ErrorMessage"] != null)
+{
+<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;gap:12px;">
+    <span style="font-size:1.3rem">❌</span>
+    <div>
+        <div style="font-weight:700;color:#ef4444;margin-bottom:4px;">Training Failed to Start</div>
+        <div style="font-size:.85rem;color:#fca5a5;">@TempData["ErrorMessage"]</div>
+        <div style="font-size:.76rem;color:#6b7280;margin-top:6px;">
+            Make sure the AI engine is running and the dataset has a valid <code>data.yaml</code>.
+            <a href="http://localhost:8000/health" target="_blank" style="color:#06b6d4">Check engine health →</a>
+        </div>
+    </div>
+</div>
+}
+
+<!-- Training launch overlay -->
+<div id="launchOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:999;
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;backdrop-filter:blur(6px)">
+  <div style="font-size:3rem" id="launchIcon">⏳</div>
+  <div style="font-size:1.15rem;font-weight:700;color:#e2e8f0" id="launchTitle">Preparing…</div>
+  <div style="font-size:.88rem;color:#6b7280;text-align:center;max-width:360px" id="launchMsg">Please wait while the model weights are prepared.</div>
+  <div style="width:280px;height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden">
+    <div id="launchBar" style="height:100%;width:0%;background:linear-gradient(90deg,#7c3aed,#06b6d4);border-radius:3px;transition:width .5s"></div>
+  </div>
+</div>
+
 <form id="trainConfigForm" method="post" action="/Training/Start">
     @Html.AntiForgeryToken()
+
     <input type="hidden" name="ProjectId" value="@Model.ProjectId" />
     <input type="hidden" name="DatasetId" value="@Model.DatasetId" />
     
@@ -146,8 +173,8 @@
                         <label class="form-label">Batch Size</label>
                         <select class="form-control" name="BatchSize" id="batchInput" onchange="updateCommand()">
                             <option value="4">4 (Low VRAM / CPU)</option>
-                            <option value="8">8</option>
-                            <option value="16" selected>16 (Standard GPU)</option>
+                            <option value="8" selected>8 (Recommended for 8GB GPU)</option>
+                            <option value="16">16 (Standard / 16GB+ VRAM)</option>
                             <option value="32">32 (High VRAM)</option>
                         </select>
                     </div>
@@ -349,20 +376,67 @@
         }
     }
 
-    document.getElementById('trainConfigForm').addEventListener('submit', async function (e) {
-        // Client-side validation before hitting the server.
-        const epochs = parseInt(document.getElementById('epochsInput').value, 10);
-        if (!(epochs >= 1 && epochs <= 2000)) { e.preventDefault(); alert('Epochs must be between 1 and 2000.'); return; }
+    function showLaunch(icon, title, msg, pct){
+        const ov = document.getElementById('launchOverlay');
+        ov.style.display = 'flex';
+        document.getElementById('launchIcon').textContent  = icon;
+        document.getElementById('launchTitle').textContent = title;
+        document.getElementById('launchMsg').textContent   = msg;
+        document.getElementById('launchBar').style.width   = pct + '%';
+    }
+    function hideLaunch(){ document.getElementById('launchOverlay').style.display = 'none'; }
 
-        e.preventDefault(); // pause submit while we prepare weights
+    document.getElementById('trainConfigForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        const epochs = parseInt(document.getElementById('epochsInput').value, 10);
+        if (!(epochs >= 1 && epochs <= 2000)) {
+            alert('Epochs must be between 1 and 2000.'); return;
+        }
+        const modelName = document.getElementById('selectedScale').value;
+        if (!modelName) { alert('Please select a model scale first.'); return; }
+
         const btn = document.getElementById('startTrainBtn');
         btn.disabled = true;
 
-        const ok = await ensureModelReady(document.getElementById('selectedScale').value);
-        if (ok) {
-            this.submit(); // continue with the original POST
-        } else {
-            btn.disabled = false;
+        // Step 1: Check engine is alive
+        showLaunch('🔍', 'Checking AI Engine…', 'Verifying the Python engine is running at localhost:8000', 10);
+        try {
+            const h = await fetch('http://localhost:8000/health', { signal: AbortSignal.timeout(5000) });
+            if (!h.ok) throw new Error('Engine returned ' + h.status);
+        } catch (err) {
+            hideLaunch();
+            alert('❌ The AI training engine is not reachable.\n\nMake sure the Python engine started correctly.\n\nDetails: ' + err.message);
+            btn.disabled = false; return;
         }
+
+        // Step 2: Ensure model weights are downloaded
+        showLaunch('⬇️', 'Preparing Model Weights…',
+            `Checking if ${modelName} is cached, downloading if needed…`, 35);
+        try {
+            const r = await fetch('/api/models/ensure', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: modelName }),
+                signal: AbortSignal.timeout(120000) // 2 min timeout for download
+            });
+            if (!r.ok) {
+                const txt = await r.text().catch(() => '');
+                throw new Error(txt || 'Model download failed (HTTP ' + r.status + ')');
+            }
+            const info = await r.json();
+            showLaunch('🚀', 'Starting Training…',
+                `${modelName} ready (${info.size_mb} MB). Launching YOLO training…`, 80);
+        } catch (err) {
+            hideLaunch();
+            alert('❌ Could not prepare model weights.\n\n' + err.message +
+                  '\n\nCheck the Python engine log for details.');
+            btn.disabled = false; return;
+        }
+
+        // Step 3: Submit form — controller will call Python /training/start
+        showLaunch('🧠', 'Launching Training…', 'Sending configuration to the AI engine…', 95);
+        this.submit();
     });
+
 </script>

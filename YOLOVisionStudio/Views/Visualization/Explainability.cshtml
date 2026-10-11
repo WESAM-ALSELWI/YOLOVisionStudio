@@ -3,300 +3,219 @@
 }
 
 <style>
-    .pipeline-container { overflow-x: auto; padding: 20px 0; margin-bottom: 30px; }
-    .pipeline-flow { display: flex; align-items: center; min-width: max-content; padding: 10px; }
-    
-    .pipeline-step { background: var(--color-card); border: 2px solid var(--color-border); border-radius: var(--radius-lg); width: 220px; padding: 15px; position: relative; transition: all 0.3s; }
-    .pipeline-step.active { border-color: var(--color-primary-start); box-shadow: 0 0 20px rgba(124, 58, 237, 0.3); transform: translateY(-5px); }
-    
-    .step-badge { position: absolute; top: -12px; left: -12px; width: 30px; height: 30px; background: var(--color-primary-start); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid var(--color-bg); }
-    .step-icon { font-size: 2rem; color: var(--color-primary-end); margin-bottom: 10px; text-align: center; }
-    
-    .pipeline-arrow { font-size: 1.5rem; color: var(--text-muted); margin: 0 15px; }
-    
-    .step-img-area { height: 120px; background: #000; border-radius: 6px; margin-top: 10px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-    
-    /* Image variations for pipeline steps */
-    .img-base { width: 100%; height: 100%; background: linear-gradient(135deg, #1e3a8a, #064e3b); }
-    .img-preproc { filter: grayscale(1) contrast(1.2) brightness(0.9); }
-    .img-features { background: linear-gradient(45deg, #440154, #2a788e, #7ad151, #fde725); opacity: 0.8; mix-blend-mode: screen; position: absolute; top:0;left:0;right:0;bottom:0;}
-    
-    .canvas-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-    
-    .explanation-panel { background: var(--color-card); border-radius: var(--radius-lg); border: 1px solid var(--color-border); padding: 20px; }
-    .prob-bar-container { height: 8px; background: #1f2937; border-radius: 4px; overflow: hidden; width: 100%; margin-top: 5px; }
-    .prob-bar { height: 100%; background: var(--color-success); width: 0%; }
+    .viz-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    .viz-card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 20px; }
+    .viz-image { width: 100%; border-radius: 8px; margin-top: 10px; }
+    .viz-controls { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+    .viz-controls select, .viz-controls input { flex: 1; min-width: 150px; }
+    .heatmap-container { position: relative; display: inline-block; }
+    .heatmap-overlay { position: absolute; top: 0; left: 0; opacity: 0.6; pointer-events: none; }
+    .layer-selector { max-height: 200px; overflow-y: auto; }
+    .layer-option { padding: 8px 12px; cursor: pointer; border-radius: 6px; margin: 2px 0; transition: background 0.2s; }
+    .layer-option:hover { background: rgba(124, 58, 237, 0.1); }
+    .layer-option.selected { background: rgba(124, 58, 237, 0.2); border-left: 3px solid var(--color-primary-start); }
+    .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 15px; }
+    .stat-item { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; }
+    .stat-label { font-size: 0.75rem; color: var(--text-muted); }
+    .stat-value { font-size: 1rem; font-weight: bold; color: var(--color-primary-end); }
 </style>
 
 <div class="page-header">
-    <h1 class="page-title">Prediction Explainability</h1>
-    <p class="page-subtitle">Understand how the model makes decisions step-by-step</p>
+    <h1 class="page-title">Real Prediction Explainability</h1>
+    <p class="page-subtitle">Grad-CAM & Attention Maps - See exactly what the model focuses on</p>
 </div>
 
-<div class="row mb-4">
-    <div class="col-md-4">
-        <div class="card p-3 d-flex flex-row align-items-center justify-content-between h-100">
-            <div>
-                <h5 class="mb-1">Input Image</h5>
-                <button class="btn btn-sm btn-outline mt-2">Upload File</button>
-            </div>
-            <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #1e3a8a, #064e3b); border-radius: 8px; border: 1px solid var(--color-border);"></div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card p-3 h-100">
-            <h5 class="mb-2">Model</h5>
-            <select class="form-control bg-dark text-white border-secondary mb-2">
-                <option>YOLOv8m-Helmet-v2</option>
-                <option>YOLOv8n-Baseline</option>
-            </select>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card p-3 d-flex align-items-center justify-content-center h-100" style="background: rgba(124, 58, 237, 0.1); border-color: var(--color-primary-start);">
-            <button class="btn btn-primary btn-lg w-100" id="explainBtn" onclick="runExplanation()">
-                <i class="fas fa-search-plus mr-2"></i> Generate Explanation
-            </button>
-        </div>
-    </div>
+<div class="viz-controls">
+    <input type="file" id="imageInput" accept="image/*" class="form-control" />
+    <select id="modelSelect" class="form-control">
+        <option value="yolo11n.pt">YOLO11n (Nano)</option>
+        <option value="yolo11s.pt">YOLO11s (Small)</option>
+        <option value="yolo11m.pt">YOLO11m (Medium)</option>
+    </select>
+    <select id="layerSelect" class="form-control">
+        <option value="model.22">Final Conv Layer (model.22)</option>
+        <option value="model.21">Penultimate Layer (model.21)</option>
+        <option value="model.20">Layer 20</option>
+        <option value="model.19">Layer 19</option>
+        <option value="model.18">Layer 18</option>
+    </select>
+    <button class="btn btn-primary" onclick="generateGradCAM()">
+        <i class="fas fa-fire mr-2"></i> Generate Grad-CAM
+    </button>
+    <button class="btn btn-success" onclick="generateAttentionMaps()">
+        <i class="fas fa-eye mr-2"></i> Attention Maps
+    </button>
 </div>
 
-<h4 class="mb-3">Inference Pipeline</h4>
-<div class="pipeline-container">
-    <div class="pipeline-flow">
-        <!-- Step 1 -->
-        <div class="pipeline-step" id="pstep-1">
-            <div class="step-badge">1</div>
-            <div class="step-icon"><i class="fas fa-image"></i></div>
-            <h6 class="text-center">Input</h6>
-            <p class="small text-muted text-center m-0">Raw 1920x1080 RGB image</p>
-            <div class="step-img-area"><div class="img-base"></div></div>
-        </div>
-        
-        <i class="fas fa-long-arrow-alt-right pipeline-arrow"></i>
-        
-        <!-- Step 2 -->
-        <div class="pipeline-step" id="pstep-2">
-            <div class="step-badge">2</div>
-            <div class="step-icon"><i class="fas fa-compress-arrows-alt"></i></div>
-            <h6 class="text-center">Preprocess</h6>
-            <p class="small text-muted text-center m-0">Resize to 640x640, Normalize</p>
-            <div class="step-img-area"><div class="img-base img-preproc"></div></div>
-        </div>
-
-        <i class="fas fa-long-arrow-alt-right pipeline-arrow"></i>
-        
-        <!-- Step 3 -->
-        <div class="pipeline-step" id="pstep-3">
-            <div class="step-badge">3</div>
-            <div class="step-icon"><i class="fas fa-brain"></i></div>
-            <h6 class="text-center">Feature Ext.</h6>
-            <p class="small text-muted text-center m-0">Backbone processing</p>
-            <div class="step-img-area">
-                <div class="img-base img-preproc"></div>
-                <div class="img-features"></div>
+<div id="resultsSection" style="display: none;">
+    <div class="viz-container">
+        <!-- Original Image -->
+        <div class="viz-card">
+            <h5><i class="fas fa-image mr-2"></i>Original Image</h5>
+            <img id="originalImage" class="viz-image" alt="Original" />
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-label">Target Class</div>
+                    <div class="stat-value" id="targetClass">-</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Confidence</div>
+                    <div class="stat-value" id="confidence">-</div>
+                </div>
             </div>
         </div>
 
-        <i class="fas fa-long-arrow-alt-right pipeline-arrow"></i>
-        
-        <!-- Step 4 -->
-        <div class="pipeline-step" id="pstep-4">
-            <div class="step-badge">4</div>
-            <div class="step-icon"><i class="fas fa-border-all"></i></div>
-            <h6 class="text-center">Raw Output</h6>
-            <p class="small text-muted text-center m-0">8,400 raw anchor boxes</p>
-            <div class="step-img-area">
-                <div class="img-base img-preproc"></div>
-                <canvas class="canvas-overlay" id="canvas-raw"></canvas>
+        <!-- Grad-CAM Heatmap -->
+        <div class="viz-card">
+            <h5><i class="fas fa-fire mr-2"></i>Grad-CAM Heatmap</h5>
+            <div class="heatmap-container">
+                <img id="gradcamHeatmap" class="viz-image" alt="Grad-CAM" />
             </div>
+            <p class="small text-muted mt-2">Red areas = high activation (model focuses here)</p>
         </div>
 
-        <i class="fas fa-long-arrow-alt-right pipeline-arrow"></i>
-        
-        <!-- Step 5 -->
-        <div class="pipeline-step" id="pstep-5">
-            <div class="step-badge">5</div>
-            <div class="step-icon"><i class="fas fa-filter"></i></div>
-            <h6 class="text-center">NMS Filter</h6>
-            <p class="small text-muted text-center m-0">Remove overlapping</p>
-            <div class="step-img-area">
-                <div class="img-base img-preproc"></div>
-                <canvas class="canvas-overlay" id="canvas-nms"></canvas>
-            </div>
+        <!-- Overlay -->
+        <div class="viz-card">
+            <h5><i class="fas fa-layer-group mr-2"></i>Overlay</h5>
+            <img id="gradcamOverlay" class="viz-image" alt="Overlay" />
+            <p class="small text-muted mt-2">Heatmap blended with original image</p>
         </div>
 
-        <i class="fas fa-long-arrow-alt-right pipeline-arrow"></i>
-        
-        <!-- Step 6 -->
-        <div class="pipeline-step" id="pstep-6">
-            <div class="step-badge">6</div>
-            <div class="step-icon"><i class="fas fa-check-double"></i></div>
-            <h6 class="text-center">Final Detections</h6>
-            <p class="small text-muted text-center m-0">Apply conf threshold</p>
-            <div class="step-img-area">
-                <div class="img-base"></div>
-                <canvas class="canvas-overlay" id="canvas-final"></canvas>
-            </div>
+        <!-- Attention Maps -->
+        <div class="viz-card">
+            <h5><i class="fas fa-eye mr-2"></i>Multi-Scale Attention</h5>
+            <div id="attentionMapsContainer" class="d-flex flex-wrap gap-2"></div>
+            <img id="attentionOverlay" class="viz-image mt-2" alt="Attention Overlay" style="display: none;" />
         </div>
+    </div>
+
+    <!-- Layer Information -->
+    <div class="viz-card mt-3">
+        <h5><i class="fas fa-sitemap mr-2"></i>Analyzed Layer: <span id="analyzedLayer">-</span></h5>
+        <p class="text-muted small">Grad-CAM shows which regions of the image contributed most to the prediction for the selected layer.</p>
     </div>
 </div>
 
-<div class="row" id="breakdownSection" style="display: none; opacity: 0; transition: opacity 0.5s;">
-    <div class="col-md-8">
-        <div class="explanation-panel h-100">
-            <h4 class="mb-4">Detection Breakdown</h4>
-            
-            <!-- Det 1 -->
-            <div class="mb-4 bg-dark p-3 rounded border border-secondary">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h5 class="m-0 text-success"><i class="fas fa-square mr-2"></i> Detection 1: Helmet</h5>
-                    <span class="badge badge-success" style="font-size: 1rem;">94.2%</span>
-                </div>
-                <div class="row">
-                    <div class="col-md-8">
-                        <div class="mb-2">
-                            <div class="d-flex justify-content-between small text-muted"><span>Helmet (Class 0)</span><span>0.942</span></div>
-                            <div class="prob-bar-container"><div class="prob-bar" style="width: 94.2%;"></div></div>
-                        </div>
-                        <div class="mb-2">
-                            <div class="d-flex justify-content-between small text-muted"><span>No-Helmet (Class 1)</span><span>0.045</span></div>
-                            <div class="prob-bar-container"><div class="prob-bar bg-danger" style="width: 4.5%;"></div></div>
-                        </div>
-                        <div class="mb-2">
-                            <div class="d-flex justify-content-between small text-muted"><span>Background</span><span>0.013</span></div>
-                            <div class="prob-bar-container"><div class="prob-bar bg-secondary" style="width: 1.3%;"></div></div>
-                        </div>
-                    </div>
-                    <div class="col-md-4 border-left border-secondary">
-                        <p class="small text-muted mb-1">Bounding Box Format</p>
-                        <code class="d-block bg-black p-1 rounded text-info small">[cx, cy, w, h]</code>
-                        <code class="d-block bg-black p-1 rounded text-info small mt-1">[0.45, 0.32, 0.12, 0.15]</code>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Det 2 -->
-            <div class="mb-2 bg-dark p-3 rounded border border-secondary">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h5 class="m-0 text-danger"><i class="fas fa-square mr-2"></i> Detection 2: No-Helmet</h5>
-                    <span class="badge badge-danger" style="font-size: 1rem;">82.7%</span>
-                </div>
-                <div class="row">
-                    <div class="col-md-8">
-                        <div class="mb-2">
-                            <div class="d-flex justify-content-between small text-muted"><span>Helmet (Class 0)</span><span>0.150</span></div>
-                            <div class="prob-bar-container"><div class="prob-bar bg-success" style="width: 15.0%;"></div></div>
-                        </div>
-                        <div class="mb-2">
-                            <div class="d-flex justify-content-between small text-muted"><span>No-Helmet (Class 1)</span><span>0.827</span></div>
-                            <div class="prob-bar-container"><div class="prob-bar bg-danger" style="width: 82.7%;"></div></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-        </div>
+<div id="loadingSection" style="display: none; text-align: center; padding: 40px;">
+    <div class="spinner-border text-primary" role="status">
+        <span class="sr-only">Loading...</span>
     </div>
-    <div class="col-md-4">
-        <div class="explanation-panel bg-dark h-100">
-            <h5 class="text-warning"><i class="fas fa-lightbulb mr-2"></i> Insights</h5>
-            <p class="text-secondary small mt-3">The model is highly confident (94.2%) in the first detection. The feature maps show strong activation around the hard hat's distinct curved edge and color contrast.</p>
-            <p class="text-secondary small">For the second detection (No-Helmet), confidence is slightly lower (82.7%) because the person is partially occluded, leading to some uncertainty between class 0 and 1.</p>
-            <hr class="border-secondary">
-            <h6 class="text-muted">Inference Stats</h6>
-            <ul class="list-unstyled small">
-                <li class="d-flex justify-content-between mb-1"><span>Preprocess:</span> <span>1.2ms</span></li>
-                <li class="d-flex justify-content-between mb-1"><span>Inference (GPU):</span> <span class="text-info">8.4ms</span></li>
-                <li class="d-flex justify-content-between mb-1"><span>NMS:</span> <span>0.8ms</span></li>
-                <li class="d-flex justify-content-between font-weight-bold mt-2 border-top border-secondary pt-1"><span>Total:</span> <span class="text-success">10.4ms</span></li>
-            </ul>
-        </div>
-    </div>
+    <p class="mt-3">Generating explanation... This may take a few seconds.</p>
 </div>
 
 @section Scripts {
     <script>
-        let cycleInterval;
-        let currentStep = 1;
+        let currentImageBase64 = null;
 
-        function drawBoxes(canvasId, count, isFinal = false) {
-            let canvas = document.getElementById(canvasId);
-            let ctx = canvas.getContext('2d');
-            canvas.width = canvas.offsetWidth;
-            canvas.height = canvas.offsetHeight;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            for(let i=0; i<count; i++) {
-                let x = Math.random() * (canvas.width - 30);
-                let y = Math.random() * (canvas.height - 30);
-                let w = 20 + Math.random() * 40;
-                let h = 20 + Math.random() * 40;
-                
-                if (isFinal) {
-                    ctx.strokeStyle = i % 2 === 0 ? '#10b981' : '#ef4444';
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(x, y, w, h);
-                    
-                    ctx.fillStyle = ctx.strokeStyle;
-                    ctx.fillRect(x, y - 12, w, 12);
-                    
-                    ctx.fillStyle = '#fff';
-                    ctx.font = '10px Arial';
-                    ctx.fillText(i % 2 === 0 ? 'Helmet' : 'No-H', x + 2, y - 2);
-                } else {
-                    ctx.strokeStyle = `rgba(16, 185, 129, ${Math.random() * 0.5 + 0.1})`;
-                    ctx.lineWidth = 1;
-                    ctx.strokeRect(x, y, w, h);
+        document.getElementById('imageInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    currentImageBase64 = event.target.result.split(',')[1];
+                    document.getElementById('originalImage').src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        async function generateGradCAM() {
+            const modelPath = document.getElementById('modelSelect').value;
+            const targetLayer = document.getElementById('layerSelect').value;
+
+            if (!currentImageBase64) {
+                alert('Please select an image first');
+                return;
+            }
+
+            showLoading(true);
+
+            try {
+                const response = await fetch('/Visualization/GenerateGradCAM', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        modelPath: modelPath,
+                        imageBase64: currentImageBase64,
+                        targetLayer: targetLayer
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.originalImageBase64) {
+                    document.getElementById('originalImage').src = 'data:image/jpeg;base64,' + data.originalImageBase64;
+                    document.getElementById('gradcamHeatmap').src = 'data:image/jpeg;base64,' + data.heatmapBase64;
+                    document.getElementById('gradcamOverlay').src = 'data:image/jpeg;base64,' + data.overlayBase64;
+                    document.getElementById('targetClass').textContent = data.targetClass || '-';
+                    document.getElementById('confidence').textContent = data.confidence ? (data.confidence * 100).toFixed(1) + '%' : '-';
+                    document.getElementById('analyzedLayer').textContent = targetLayer;
+
+                    document.getElementById('resultsSection').style.display = 'block';
                 }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to generate Grad-CAM. Make sure the Python AI engine is running.');
+            } finally {
+                showLoading(false);
             }
         }
 
-        function runExplanation() {
-            clearInterval(cycleInterval);
-            document.querySelectorAll('.pipeline-step').forEach(s => s.classList.remove('active'));
-            document.getElementById('breakdownSection').style.display = 'none';
-            document.getElementById('breakdownSection').style.opacity = '0';
-            
-            let btn = document.getElementById('explainBtn');
-            btn.innerHTML = '<i class="fas fa-cog fa-spin mr-2"></i> Analyzing...';
-            btn.disabled = true;
-            
-            // Draw random canvases
-            drawBoxes('canvas-raw', 40);
-            drawBoxes('canvas-nms', 15);
-            drawBoxes('canvas-final', 3, true);
-            
-            currentStep = 1;
-            
-            cycleInterval = setInterval(() => {
-                document.querySelectorAll('.pipeline-step').forEach(s => s.classList.remove('active'));
-                document.getElementById('pstep-' + currentStep).classList.add('active');
-                
-                if (currentStep === 6) {
-                    clearInterval(cycleInterval);
-                    btn.innerHTML = '<i class="fas fa-check mr-2"></i> Analysis Complete';
-                    btn.classList.replace('btn-primary', 'btn-success');
-                    
-                    setTimeout(() => {
-                        document.getElementById('breakdownSection').style.display = 'flex';
-                        setTimeout(() => document.getElementById('breakdownSection').style.opacity = '1', 50);
-                        
-                        btn.innerHTML = '<i class="fas fa-search-plus mr-2"></i> Generate Explanation';
-                        btn.classList.replace('btn-success', 'btn-primary');
-                        btn.disabled = false;
-                    }, 500);
+        async function generateAttentionMaps() {
+            const modelPath = document.getElementById('modelSelect').value;
+
+            if (!currentImageBase64) {
+                alert('Please select an image first');
+                return;
+            }
+
+            showLoading(true);
+
+            try {
+                const response = await fetch('/Visualization/GenerateAttentionMaps', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        modelPath: modelPath,
+                        imageBase64: currentImageBase64
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.originalImageBase64) {
+                    document.getElementById('originalImage').src = 'data:image/jpeg;base64,' + data.originalImageBase64;
+                    document.getElementById('attentionOverlay').src = 'data:image/jpeg;base64,' + data.overlayBase64;
+                    document.getElementById('attentionOverlay').style.display = 'block';
+
+                    // Display individual attention maps
+                    const container = document.getElementById('attentionMapsContainer');
+                    container.innerHTML = '';
+                    data.attentionMaps.forEach((map, idx) => {
+                        const div = document.createElement('div');
+                        div.innerHTML = `
+                            <div style="text-align: center;">
+                                <img src="data:image/jpeg;base64,${map.heatmap_base64}" 
+                                     style="width: 100px; height: 100px; border-radius: 4px;" />
+                                <p class="small text-muted mt-1">Layer ${map.layer_index}</p>
+                            </div>
+                        `;
+                        container.appendChild(div);
+                    });
+
+                    document.getElementById('resultsSection').style.display = 'block';
                 }
-                
-                currentStep++;
-            }, 800);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to generate attention maps. Make sure the Python AI engine is running.');
+            } finally {
+                showLoading(false);
+            }
         }
-        
-        // Initial draw
-        window.onload = () => {
-            drawBoxes('canvas-raw', 30);
-            drawBoxes('canvas-nms', 10);
-            drawBoxes('canvas-final', 2, true);
-        };
+
+        function showLoading(show) {
+            document.getElementById('loadingSection').style.display = show ? 'block' : 'none';
+            document.getElementById('resultsSection').style.display = show ? 'none' : 'block';
+        }
     </script>
 }

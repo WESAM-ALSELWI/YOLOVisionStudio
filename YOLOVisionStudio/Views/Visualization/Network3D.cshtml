@@ -1,0 +1,328 @@
+@{
+    ViewData["Title"] = "3D Network Topology";
+}
+
+<style>
+    .viz-container { width: 100%; height: calc(100vh - 120px); background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-lg); position: relative; overflow: hidden; }
+    #network3d { width: 100%; height: 100%; }
+    
+    .controls-overlay { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px; z-index: 10; }
+    .controls-overlay h5 { margin: 0 0 10px 0; color: white; }
+    .controls-overlay label { color: #ccc; font-size: 0.85rem; display: block; margin-bottom: 5px; }
+    .controls-overlay select, .controls-overlay input { width: 100%; margin-bottom: 10px; background: #1f2937; border: 1px solid #374151; color: white; padding: 5px; border-radius: 4px; }
+    .controls-overlay button { width: 100%; margin-bottom: 5px; }
+    
+    .legend { position: absolute; bottom: 20px; right: 20px; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px; z-index: 10; }
+    .legend h6 { color: white; margin: 0 0 10px 0; }
+    .legend-item { display: flex; align-items: center; margin-bottom: 5px; }
+    .legend-color { width: 16px; height: 16px; border-radius: 4px; margin-right: 8px; }
+    .legend-label { color: #ccc; font-size: 0.85rem; }
+    
+    .node-info { position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.9); padding: 15px; border-radius: 8px; z-index: 10; min-width: 200px; display: none; }
+    .node-info h6 { color: white; margin: 0 0 10px 0; }
+    .node-info p { color: #ccc; font-size: 0.85rem; margin: 5px 0; }
+    .node-info strong { color: var(--color-primary-end); }
+</style>
+
+<div class="page-header">
+    <h1 class="page-title">3D Network Topology</h1>
+    <p class="page-subtitle">Interactive force-directed visualization of YOLO architecture</p>
+</div>
+
+<div class="viz-container">
+    <div id="network3d"></div>
+    
+    <div class="controls-overlay">
+        <h5><i class="fas fa-cog mr-2"></i>Controls</h5>
+        <label>YOLO Version</label>
+        <select id="versionSelect" onchange="loadNetwork()">
+            <option value="v11">YOLOv11</option>
+            <option value="v10">YOLOv10</option>
+            <option value="v8">YOLOv8</option>
+        </select>
+        <label>Model Size</label>
+        <select id="sizeSelect" onchange="loadNetwork()">
+            <option value="n">Nano</option>
+            <option value="s">Small</option>
+            <option value="m">Medium</option>
+            <option value="l">Large</option>
+            <option value="x">X-Large</option>
+        </select>
+        <label>Layout</label>
+        <select id="layoutSelect" onchange="updateLayout()">
+            <option value="force">Force-Directed</option>
+            <option value="tree">Tree Layout</option>
+            <option value="radial">Radial Layout</option>
+        </select>
+        <label>Gravity</label>
+        <input type="range" id="gravitySlider" min="0" max="1" step="0.1" value="0.5" onchange="updateSimulation()">
+        <label>Link Distance</label>
+        <input type="range" id="linkSlider" min="50" max="200" step="10" value="100" onchange="updateSimulation()">
+        <button class="btn btn-primary" onclick="resetZoom()">
+            <i class="fas fa-expand mr-2"></i>Reset Zoom
+        </button>
+        <button class="btn btn-outline-secondary" onclick="toggleRotation()">
+            <i class="fas fa-sync mr-2"></i>Auto Rotate
+        </button>
+    </div>
+    
+    <div class="legend">
+        <h6>Layer Types</h6>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #7c3aed;"></div>
+            <span class="legend-label">Convolutional</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #06b6d4;"></div>
+            <span class="legend-label">C2F / CSP</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #10b981;"></div>
+            <span class="legend-label">SPPF</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #3b82f6;"></div>
+            <span class="legend-label">Upsample</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #94a3b8;"></div>
+            <span class="legend-label">Concat</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #f59e0b;"></div>
+            <span class="legend-label">Detect Head</span>
+        </div>
+    </div>
+    
+    <div class="node-info" id="nodeInfo">
+        <h6 id="nodeTitle">Layer Info</h6>
+        <p><strong>Type:</strong> <span id="nodeType">-</span></p>
+        <p><strong>Parameters:</strong> <span id="nodeParams">-</span></p>
+        <p><strong>FLOPs:</strong> <span id="nodeFlops">-</span></p>
+        <p><strong>Shape:</strong> <span id="nodeShape">-</span></p>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/3d-force-graph"></script>
+    <script>
+        let graphData = { nodes: [], links: [] };
+        let Graph;
+        let autoRotate = false;
+        let rotationInterval;
+
+        async function loadNetwork() {
+            const version = document.getElementById('versionSelect').value;
+            const size = document.getElementById('sizeSelect').value;
+            
+            try {
+                const response = await fetch(`/Visualization/GetModelArchitecture?yoloVersion=${version}&modelSize=${size}`);
+                const data = await response.json();
+                
+                // Convert architecture data to graph format
+                graphData = convertToGraph(data);
+                
+                if (Graph) {
+                    Graph.graphData(graphData);
+                } else {
+                    initGraph();
+                }
+            } catch (error) {
+                console.error('Error loading network:', error);
+                // Use fallback data
+                graphData = generateFallbackGraph();
+                if (!Graph) initGraph();
+            }
+        }
+
+        function convertToGraph(architecture) {
+            const nodes = [];
+            const links = [];
+            let nodeId = 0;
+            
+            function processLayer(layer, parentId = null) {
+                const id = nodeId++;
+                nodes.push({
+                    id: id,
+                    name: layer.name || `Layer ${id}`,
+                    type: layer.type || 'Unknown',
+                    parameters: layer.parameters || 0,
+                    flops: layer.flops || 0,
+                    shape: layer.output_shape || [],
+                    color: getColorByType(layer.type)
+                });
+                
+                if (parentId !== null) {
+                    links.push({ source: parentId, target: id });
+                }
+                
+                if (layer.children && layer.children.length > 0) {
+                    layer.children.forEach(child => processLayer(child, id));
+                }
+            }
+            
+            if (architecture.layers) {
+                architecture.layers.forEach(layer => processLayer(layer));
+            }
+            
+            return { nodes, links };
+        }
+
+        function getColorByType(type) {
+            const colors = {
+                'Conv': '#7c3aed',
+                'Conv2d': '#7c3aed',
+                'C2F': '#06b6d4',
+                'CSP': '#06b6d4',
+                'SPPF': '#10b981',
+                'Upsample': '#3b82f6',
+                'Concat': '#94a3b8',
+                'Detect': '#f59e0b',
+                'BatchNorm2d': '#ec4899',
+                'SiLU': '#8b5cf6'
+            };
+            return colors[type] || '#6b7280';
+        }
+
+        function generateFallbackGraph() {
+            const nodes = [];
+            const links = [];
+            const types = ['Conv', 'Conv2d', 'C2F', 'SPPF', 'Upsample', 'Concat', 'Detect'];
+            
+            for (let i = 0; i < 20; i++) {
+                const type = types[Math.floor(Math.random() * types.length)];
+                nodes.push({
+                    id: i,
+                    name: `${type}_${i}`,
+                    type: type,
+                    parameters: Math.floor(Math.random() * 100000),
+                    flops: Math.floor(Math.random() * 1000000),
+                    shape: [64, 160, 160],
+                    color: getColorByType(type)
+                });
+                
+                if (i > 0) {
+                    links.push({ source: i - 1, target: i });
+                    if (i > 5 && Math.random() > 0.5) {
+                        links.push({ source: i - 3, target: i });
+                    }
+                }
+            }
+            
+            return { nodes, links };
+        }
+
+        function initGraph() {
+            const container = document.getElementById('network3d');
+            
+            Graph = ForceGraph3D()(container)
+                .graphData(graphData)
+                .nodeLabel(node => node.name)
+                .nodeAutoColorBy('type')
+                .nodeColor(node => node.color)
+                .nodeRelSize(3)
+                .linkWidth(1)
+                .linkColor('#4b5563')
+                .onNodeClick(node => showNodeInfo(node))
+                .onNodeDragEnd(node => {
+                    node.fx = node.x;
+                    node.fy = node.y;
+                    node.fz = node.z;
+                });
+            
+            updateSimulation();
+        }
+
+        function updateSimulation() {
+            if (!Graph) return;
+            
+            const gravity = parseFloat(document.getElementById('gravitySlider').value);
+            const linkDistance = parseInt(document.getElementById('linkSlider').value);
+            
+            Graph
+                .d3Force('charge', d3.forceManyBody().strength(-200))
+                .d3Force('center', d3.forceCenter().strength(gravity))
+                .d3Force('link', d3.forceLink().distance(linkDistance));
+        }
+
+        function updateLayout() {
+            const layout = document.getElementById('layoutSelect').value;
+            if (!Graph) return;
+            
+            Graph.d3Force('charge', null);
+            Graph.d3Force('center', null);
+            Graph.d3Force('link', null);
+            
+            if (layout === 'force') {
+                updateSimulation();
+            } else if (layout === 'tree') {
+                // Simple tree layout
+                const levels = {};
+                graphData.nodes.forEach((node, i) => {
+                    const level = Math.floor(i / 5);
+                    if (!levels[level]) levels[level] = [];
+                    levels[level].push(node);
+                });
+                
+                Object.keys(levels).forEach((level, idx) => {
+                    const y = (idx - Object.keys(levels).length / 2) * 100;
+                    levels[level].forEach((node, i) => {
+                        node.x = (i - levels[level].length / 2) * 80;
+                        node.y = y;
+                        node.z = 0;
+                        node.fx = node.x;
+                        node.fy = node.y;
+                        node.fz = node.z;
+                    });
+                });
+            } else if (layout === 'radial') {
+                graphData.nodes.forEach((node, i) => {
+                    const angle = (i / graphData.nodes.length) * Math.PI * 2;
+                    const radius = 150;
+                    node.x = Math.cos(angle) * radius;
+                    node.y = Math.sin(angle) * radius;
+                    node.z = (i % 3 - 1) * 50;
+                    node.fx = node.x;
+                    node.fy = node.y;
+                    node.fz = node.z;
+                });
+            }
+        }
+
+        function showNodeInfo(node) {
+            const info = document.getElementById('nodeInfo');
+            document.getElementById('nodeTitle').textContent = node.name;
+            document.getElementById('nodeType').textContent = node.type;
+            document.getElementById('nodeParams').textContent = node.parameters.toLocaleString();
+            document.getElementById('nodeFlops').textContent = (node.flops / 1e6).toFixed(2) + 'M';
+            document.getElementById('nodeShape').textContent = node.shape ? node.shape.join(', ') : '-';
+            info.style.display = 'block';
+        }
+
+        function resetZoom() {
+            if (Graph) Graph.cameraPosition({ x: 0, y: 0, z: 500 });
+        }
+
+        function toggleRotation() {
+            autoRotate = !autoRotate;
+            if (autoRotate) {
+                rotationInterval = setInterval(() => {
+                    if (Graph) {
+                        const camera = Graph.cameraPosition();
+                        Graph.cameraPosition({
+                            x: camera.x * Math.cos(0.01) - camera.z * Math.sin(0.01),
+                            y: camera.y,
+                            z: camera.x * Math.sin(0.01) + camera.z * Math.cos(0.01)
+                        });
+                    }
+                }, 50);
+            } else {
+                clearInterval(rotationInterval);
+            }
+        }
+
+        // Initialize
+        loadNetwork();
+    </script>
+}

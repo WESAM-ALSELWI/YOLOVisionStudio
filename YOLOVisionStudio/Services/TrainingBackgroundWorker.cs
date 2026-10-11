@@ -39,7 +39,27 @@ namespace YOLOVisionStudio.Services
                     {
                         if (string.IsNullOrEmpty(job.PythonJobId)) continue;
 
-                        var metrics = await aiService.GetTrainingMetrics(job.PythonJobId);
+                        TrainingMetricsResponse metrics;
+                        try
+                        {
+                            metrics = await aiService.GetTrainingMetrics(job.PythonJobId);
+                        }
+                        catch
+                        {
+                            // Python engine unreachable — leave job alone for now, retry next cycle
+                            continue;
+                        }
+
+                        // Python returned a 404 / empty response for this job — engine was restarted
+                        // and the in-memory job state was lost.  Mark it as failed so it stops being polled.
+                        if (string.IsNullOrEmpty(metrics.Status) && metrics.Epoch == 0 && !metrics.IsFinished)
+                        {
+                            job.Status = JobStatus.Failed;
+                            job.ErrorMessage = "Training engine was restarted and lost this job's state. Please start a new training run.";
+                            await context.SaveChangesAsync(stoppingToken);
+                            await hubContext.Clients.Group($"job_{job.Id}").SendAsync("JobStatusChanged", job.Status.ToString(), cancellationToken: stoppingToken);
+                            continue;
+                        }
 
                         if (!string.IsNullOrEmpty(metrics.Status))
                         {
@@ -77,10 +97,11 @@ namespace YOLOVisionStudio.Services
                             context.TrainingMetrics.Add(metric);
                             await context.SaveChangesAsync(stoppingToken);
 
-                            await hubContext.Clients.Group(job.Id.ToString()).SendAsync("ReceiveMetrics", metric, cancellationToken: stoppingToken);
-                            await hubContext.Clients.Group(job.Id.ToString()).SendAsync("JobStatusChanged", job.Status.ToString(), cancellationToken: stoppingToken);
+                            await hubContext.Clients.Group($"job_{job.Id}").SendAsync("ReceiveMetrics", metric, cancellationToken: stoppingToken);
+                            await hubContext.Clients.Group($"job_{job.Id}").SendAsync("JobStatusChanged", job.Status.ToString(), cancellationToken: stoppingToken);
                         }
                     }
+
                 }
                 catch
                 {

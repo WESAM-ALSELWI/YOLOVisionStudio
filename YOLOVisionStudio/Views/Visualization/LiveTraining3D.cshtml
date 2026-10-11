@@ -1,0 +1,597 @@
+@{
+    ViewData["Title"] = "Live 3D Training Visualization";
+}
+
+<style>
+    .training-viz-container { width:100%; height:calc(100vh - 120px); background:#050508; border:1px solid var(--color-border); border-radius:var(--radius-lg); position:relative; overflow:hidden; }
+    #training3d { width:100%; height:100%; display:block; }
+
+    /* Metrics overlay */
+    .metrics-overlay { position:absolute; top:16px; left:16px; background:rgba(5,5,10,0.92); padding:18px; border-radius:12px; z-index:10; min-width:260px; backdrop-filter:blur(12px); border:1px solid rgba(124,58,237,0.35); }
+    .metrics-overlay h5 { color:#e2e8f0; margin:0 0 14px; display:flex; align-items:center; gap:8px; font-size:0.92rem; }
+    .live-indicator { width:9px; height:9px; background:#10b981; border-radius:50%; animation:lpulse 1.4s infinite; flex-shrink:0; }
+    @@keyframes lpulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.3)} }
+
+    .metric-row { display:flex; justify-content:space-between; margin-bottom:9px; padding-bottom:7px; border-bottom:1px solid rgba(255,255,255,0.07); font-size:0.82rem; }
+    .metric-row:last-child { border-bottom:none; }
+    .metric-label { color:#9ca3af; }
+    .metric-value { color:#e2e8f0; font-weight:700; font-family:monospace; }
+    .metric-value.updating { color:#7c3aed; animation:flash .5s; }
+    @@keyframes flash { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    .training-progress { margin-top:12px; }
+    .progress-bar { height:7px; background:rgba(255,255,255,.06); border-radius:4px; overflow:hidden; }
+    .progress-fill { height:100%; background:linear-gradient(90deg,#7c3aed,#3b82f6); transition:width .4s; }
+    .progress-text { color:#6b7280; font-size:0.7rem; margin-top:4px; text-align:center; }
+
+    .status-badge { display:inline-block; padding:3px 12px; border-radius:20px; font-size:0.72rem; font-weight:600; margin-top:10px; }
+    .status-training { background:rgba(16,185,129,.18); color:#10b981; }
+    .status-idle { background:rgba(107,114,128,.18); color:#6b7280; }
+
+    /* Controls */
+    .controls-overlay { position:absolute; top:16px; right:16px; background:rgba(5,5,10,0.92); padding:15px; border-radius:12px; z-index:10; backdrop-filter:blur(12px); border:1px solid rgba(124,58,237,0.35); min-width:220px; }
+    .controls-overlay h6 { color:#e2e8f0; margin:0 0 12px; font-size:0.85rem; font-weight:700; }
+    .control-group { margin-bottom:10px; }
+    .control-group label { color:#9ca3af; font-size:0.72rem; display:block; margin-bottom:4px; }
+    .control-group select, .control-group input { width:100%; background:#1f2937; border:1px solid #374151; color:#e2e8f0; padding:6px; border-radius:6px; font-size:0.8rem; }
+
+    /* Legend */
+    .legend-overlay { position:absolute; bottom:16px; left:16px; background:rgba(5,5,10,0.92); padding:14px; border-radius:12px; z-index:10; backdrop-filter:blur(12px); border:1px solid rgba(124,58,237,0.35); }
+    .legend-overlay h6 { color:#e2e8f0; margin:0 0 9px; font-size:0.82rem; }
+    .legend-item { display:flex; align-items:center; margin-bottom:5px; }
+    .legend-color { width:13px; height:13px; border-radius:3px; margin-right:7px; flex-shrink:0; }
+    .legend-label { color:#9ca3af; font-size:0.75rem; }
+
+    /* Layer HUD */
+    .layer-info { position:absolute; bottom:16px; right:16px; background:rgba(5,5,10,0.95); padding:14px; border-radius:12px; z-index:10; min-width:210px; display:none; backdrop-filter:blur(12px); border:1px solid rgba(124,58,237,0.35); }
+    .layer-info h6 { color:#e2e8f0; margin:0 0 9px; font-size:0.82rem; font-weight:700; }
+    .layer-info p { color:#9ca3af; font-size:0.75rem; margin:4px 0; }
+    .layer-info strong { color:#7c3aed; }
+
+    /* Waiting state */
+    .waiting-state { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:#6b7280; gap:12px; pointer-events:none; }
+    .waiting-state .ws-icon { font-size:2.5rem; }
+</style>
+
+<div class="page-header">
+    <h1 class="page-title">Live 3D Training Visualization</h1>
+    <p class="page-subtitle">Real network layers, real activation textures, real gradient glow — connected to the live Python training engine</p>
+</div>
+
+<div class="training-viz-container">
+    <canvas id="training3d"></canvas>
+
+    <!-- Metrics Overlay -->
+    <div class="metrics-overlay">
+        <h5><span class="live-indicator"></span> Training Metrics</h5>
+        <div class="metric-row"><span class="metric-label">Epoch</span><span class="metric-value" id="metricEpoch">–</span></div>
+        <div class="metric-row"><span class="metric-label">Batch</span><span class="metric-value" id="metricBatch">–</span></div>
+        <div class="metric-row"><span class="metric-label">Box Loss</span><span class="metric-value" id="metricBoxLoss">–</span></div>
+        <div class="metric-row"><span class="metric-label">Cls Loss</span><span class="metric-value" id="metricClsLoss">–</span></div>
+        <div class="metric-row"><span class="metric-label">DFL Loss</span><span class="metric-value" id="metricDflLoss">–</span></div>
+        <div class="metric-row"><span class="metric-label">mAP@50</span><span class="metric-value" id="metricMap" style="color:#10b981;">–</span></div>
+        <div class="metric-row"><span class="metric-label">Learning Rate</span><span class="metric-value" id="metricLR">–</span></div>
+        <div class="metric-row"><span class="metric-label">Layers</span><span class="metric-value" id="metricLayers">–</span></div>
+        <div class="training-progress">
+            <div class="progress-bar"><div class="progress-fill" id="epochProgress" style="width:0%"></div></div>
+            <div class="progress-text" id="progressText">–</div>
+        </div>
+        <div class="status-badge status-idle" id="trainingStatus">Idle</div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls-overlay">
+        <h6><i class="fas fa-sliders-h" style="margin-right:6px;color:#7c3aed;"></i>Controls</h6>
+        <div class="control-group">
+            <label>Training Job</label>
+            <select id="jobSelect" onchange="connectToJob()">
+                <option value="">Loading jobs…</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>Visualization Mode</label>
+            <select id="vizMode" onchange="applyVizMode()">
+                <option value="gradient">Gradient Glow</option>
+                <option value="activation">Activation Texture</option>
+                <option value="combined" selected>Combined</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>Node Size</label>
+            <input type="range" id="nodeSize" min="0.5" max="3" step="0.1" value="1" oninput="applyNodeScale()">
+        </div>
+        <button class="btn btn-primary w-100" style="margin-top:6px;" onclick="toggleAutoRotate()" id="rotateBtn">
+            <i class="fas fa-sync" style="margin-right:6px;"></i>Auto Rotate
+        </button>
+        <button class="btn btn-outline w-100" style="margin-top:6px;" onclick="resetView()">
+            <i class="fas fa-expand" style="margin-right:6px;"></i>Reset View
+        </button>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend-overlay">
+        <h6>Layer Types</h6>
+        <div class="legend-item"><div class="legend-color" style="background:#7c3aed;"></div><span class="legend-label">Conv2d</span></div>
+        <div class="legend-item"><div class="legend-color" style="background:#06b6d4;"></div><span class="legend-label">C2f / CSP</span></div>
+        <div class="legend-item"><div class="legend-color" style="background:#10b981;"></div><span class="legend-label">SPPF</span></div>
+        <div class="legend-item"><div class="legend-color" style="background:#3b82f6;"></div><span class="legend-label">Upsample</span></div>
+        <div class="legend-item"><div class="legend-color" style="background:#94a3b8;"></div><span class="legend-label">Concat</span></div>
+        <div class="legend-item"><div class="legend-color" style="background:#f59e0b;"></div><span class="legend-label">Detect Head</span></div>
+        <hr style="border-color:rgba(255,255,255,.07);margin:8px 0;">
+        <div class="legend-item"><div class="legend-color" style="background:linear-gradient(90deg,#3b82f6,#ef4444);border-radius:2px;"></div><span class="legend-label">Glow = gradient norm</span></div>
+        <div class="legend-item"><div class="legend-color" style="background:linear-gradient(90deg,#7c3aed,#06b6d4);border-radius:2px;"></div><span class="legend-label">─── = skip connection</span></div>
+    </div>
+
+    <!-- Layer HUD -->
+    <div class="layer-info" id="layerInfo">
+        <h6 id="liName">Layer</h6>
+        <p><strong>Type:</strong> <span id="liType">–</span></p>
+        <p><strong>Shape:</strong> <span id="liShape">–</span></p>
+        <p><strong>Grad Norm:</strong> <span id="liGrad">–</span></p>
+        <p><strong>Act Range:</strong> <span id="liActRange">–</span></p>
+        <button class="btn btn-outline" style="width:100%;margin-top:6px;font-size:0.7rem;" onclick="document.getElementById('layerInfo').style.display='none'">✕ Close</button>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+/* ====================================================
+   REAL Live 3D Training Visualization
+   - No Math.random() anywhere
+   - Architecture loaded from /Visualization/GetModelArchitectureJson
+   - Running jobs loaded from /api/training/jobs
+   - Live data from Python engine WebSocket /ws/training/{pythonJobId}
+   ==================================================== */
+
+const AI_ENGINE = 'http://localhost:8000';
+
+// ---- State ----
+let lv = {
+    scene: null, camera: null, renderer: null,
+    layerGroup: null, connectionGroup: null,
+    raycaster: null, mouse: null,
+    autoRotating: false,
+    initialized: false,
+    layerMeshes: [],        // {mesh, edgeMesh, idx, name, type, shape}
+    layerTextures: {},      // idx -> THREE.Texture
+    lastGradNorms: {},
+    lastPipeline: [],
+    currentLoss: 0,
+    totalEpochs: 100,
+    isDragging: false, prevMouse: {x:0,y:0},
+    phi: 0.35, theta: 0, radius: 200,
+    target: null,
+    nodeScale: 1.0,
+    vizMode: 'combined'
+};
+
+let ws = null;
+let currentPythonJobId = null;
+
+const LAYER_W = 12, LAYER_H = 9, LAYER_D_BASE = 3, LAYER_GAP = 18;
+
+// ---- Type color map ----
+function typeColor(type) {
+    const map = {
+        'Conv': 0x7c3aed, 'Conv2d': 0x7c3aed,
+        'C2f': 0x06b6d4, 'C2F': 0x06b6d4, 'CSP': 0x06b6d4,
+        'SPPF': 0x10b981,
+        'Upsample': 0x3b82f6,
+        'Concat': 0x94a3b8,
+        'Detect': 0xf59e0b,
+        'BatchNorm2d': 0xec4899,
+        'SiLU': 0x8b5cf6
+    };
+    return map[type] || 0x6b7280;
+}
+
+// ---- Init Three.js ----
+function initThree() {
+    if (lv.initialized) return;
+    const canvas = document.getElementById('training3d');
+    if (!canvas) return;
+    if (typeof THREE === 'undefined') {
+        const s = document.createElement('script');
+        s.src = 'https://unpkg.com/three@0.160.0/build/three.min.js';
+        s.onload = () => _buildScene(canvas);
+        document.head.appendChild(s);
+    } else {
+        _buildScene(canvas);
+    }
+}
+
+function _buildScene(canvas) {
+    const W = canvas.clientWidth || 900, H = canvas.clientHeight || 600;
+    lv.scene = new THREE.Scene();
+    lv.scene.background = new THREE.Color(0x050508);
+    lv.scene.fog = new THREE.Fog(0x050508, 350, 800);
+
+    lv.camera = new THREE.PerspectiveCamera(50, W / H, 0.5, 1200);
+    lv.target = new THREE.Vector3(0, 0, 0);
+    _updateCam();
+
+    lv.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    lv.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    lv.renderer.setSize(W, H);
+
+    lv.layerGroup = new THREE.Group();
+    lv.connectionGroup = new THREE.Group();
+    lv.scene.add(lv.layerGroup);
+    lv.scene.add(lv.connectionGroup);
+
+    // Lighting
+    lv.scene.add(new THREE.AmbientLight(0x1a0a2e, 1.1));
+    const pl = new THREE.PointLight(0x7c3aed, 3, 500); pl.position.set(0, 80, 100); lv.scene.add(pl);
+    const pl2 = new THREE.PointLight(0x06b6d4, 2, 350); pl2.position.set(0, -50, -80); lv.scene.add(pl2);
+
+    // Grid
+    const grid = new THREE.GridHelper(600, 50, 0x1a0a2e, 0x120821);
+    grid.position.y = -25; grid.material.opacity = 0.35; grid.material.transparent = true;
+    lv.scene.add(grid);
+
+    lv.raycaster = new THREE.Raycaster();
+    lv.mouse = new THREE.Vector2();
+
+    // Orbit drag
+    canvas.addEventListener('mousedown', e => { lv.isDragging = true; lv.prevMouse = {x:e.clientX, y:e.clientY}; });
+    canvas.addEventListener('mousemove', e => {
+        if (!lv.isDragging) return;
+        lv.theta -= (e.clientX - lv.prevMouse.x) * 0.007;
+        lv.phi = Math.max(0.05, Math.min(Math.PI-0.05, lv.phi + (e.clientY - lv.prevMouse.y) * 0.007));
+        _updateCam();
+        lv.prevMouse = {x:e.clientX, y:e.clientY};
+    });
+    canvas.addEventListener('mouseup',    () => lv.isDragging = false);
+    canvas.addEventListener('mouseleave', () => lv.isDragging = false);
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        lv.radius = Math.max(40, Math.min(500, lv.radius + e.deltaY * 0.3));
+        _updateCam();
+    }, { passive: false });
+
+    // Click picking
+    canvas.addEventListener('click', e => {
+        const rect = canvas.getBoundingClientRect();
+        lv.mouse.x =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+        lv.mouse.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+        lv.raycaster.setFromCamera(lv.mouse, lv.camera);
+        const hits = lv.raycaster.intersectObjects(lv.layerMeshes.map(l => l.mesh));
+        if (hits.length) showLayerHud(hits[0].object.userData);
+    });
+
+    // Resize
+    new ResizeObserver(() => {
+        if (!lv.renderer) return;
+        const W2 = canvas.clientWidth, H2 = canvas.clientHeight;
+        lv.camera.aspect = W2 / H2;
+        lv.camera.updateProjectionMatrix();
+        lv.renderer.setSize(W2, H2);
+    }).observe(canvas.parentElement);
+
+    lv.initialized = true;
+    _animate();
+
+    // Load real architecture immediately
+    loadRealArchitecture();
+}
+
+function _updateCam() {
+    const x = lv.radius * Math.sin(lv.phi) * Math.sin(lv.theta);
+    const y = lv.radius * Math.cos(lv.phi);
+    const z = lv.radius * Math.sin(lv.phi) * Math.cos(lv.theta);
+    lv.camera.position.set(x, y, z);
+    lv.camera.lookAt(lv.target);
+}
+
+function _animate() {
+    requestAnimationFrame(_animate);
+    if (lv.autoRotating) { lv.theta += 0.004; _updateCam(); }
+    const t = performance.now() * 0.001;
+    const lossScale = Math.min(1, lv.currentLoss * 0.4);
+    lv.layerMeshes.forEach(({mesh, idx}) => {
+        const gn = lv.lastGradNorms[idx] || 0;
+        const pulse = 0.5 + 0.5 * Math.sin(t * (2 + lossScale * 4) + idx * 0.5);
+        if (mesh.material && mesh.material.emissiveIntensity !== undefined) {
+            mesh.material.emissiveIntensity = gn * pulse * 1.0;
+        }
+    });
+    lv.renderer && lv.renderer.render(lv.scene, lv.camera);
+}
+
+// ---- Load real YOLO architecture from API ----
+async function loadRealArchitecture() {
+    try {
+        const r = await fetch('/Visualization/GetModelArchitectureJson?yoloVersion=v11&modelSize=n');
+        if (!r.ok) throw new Error('API error');
+        const data = await r.json();
+        if (data.layers && data.layers.length > 0) {
+            buildMeshesFromArchitecture(data.layers);
+            return;
+        }
+    } catch {}
+    // Fallback: build skeleton from known YOLO11n structure
+    buildSkeletonMeshes();
+}
+
+function buildMeshesFromArchitecture(layers) {
+    lv.layerGroup.clear();
+    lv.connectionGroup.clear();
+    lv.layerMeshes = [];
+
+    // Flatten hierarchy to top-level layers
+    const flatLayers = layers.map((l, i) => ({
+        index: i,
+        name: l.name || `Layer_${i}`,
+        type: l.type || 'Conv',
+        shape: l.output_shape || [],
+        from: []
+    }));
+
+    _placeLayers(flatLayers);
+    _setText('metricLayers', flatLayers.length);
+}
+
+function buildSkeletonMeshes() {
+    // Real YOLO11n architecture skeleton (not random)
+    const arch = [
+        { index:0,  name:'Conv_0',    type:'Conv',     shape:[1,16,320,320], from:[] },
+        { index:1,  name:'Conv_1',    type:'Conv',     shape:[1,32,160,160], from:[0] },
+        { index:2,  name:'C2f_2',     type:'C2f',      shape:[1,32,160,160], from:[1] },
+        { index:3,  name:'Conv_3',    type:'Conv',     shape:[1,64,80,80],   from:[2] },
+        { index:4,  name:'C2f_4',     type:'C2f',      shape:[1,64,80,80],   from:[3] },
+        { index:5,  name:'Conv_5',    type:'Conv',     shape:[1,128,40,40],  from:[4] },
+        { index:6,  name:'C2f_6',     type:'C2f',      shape:[1,128,40,40],  from:[5] },
+        { index:7,  name:'Conv_7',    type:'Conv',     shape:[1,256,20,20],  from:[6] },
+        { index:8,  name:'C2f_8',     type:'C2f',      shape:[1,256,20,20],  from:[7] },
+        { index:9,  name:'SPPF_9',    type:'SPPF',     shape:[1,256,20,20],  from:[8] },
+        { index:10, name:'Upsample_10',type:'Upsample',shape:[1,256,40,40],  from:[9] },
+        { index:11, name:'Concat_11', type:'Concat',   shape:[1,384,40,40],  from:[10,6] },
+        { index:12, name:'C2f_12',    type:'C2f',      shape:[1,128,40,40],  from:[11] },
+        { index:13, name:'Upsample_13',type:'Upsample',shape:[1,128,80,80],  from:[12] },
+        { index:14, name:'Concat_14', type:'Concat',   shape:[1,192,80,80],  from:[13,4] },
+        { index:15, name:'C2f_15',    type:'C2f',      shape:[1,64,80,80],   from:[14] },
+        { index:16, name:'Conv_16',   type:'Conv',     shape:[1,64,40,40],   from:[15] },
+        { index:17, name:'Concat_17', type:'Concat',   shape:[1,192,40,40],  from:[16,12] },
+        { index:18, name:'C2f_18',    type:'C2f',      shape:[1,128,40,40],  from:[17] },
+        { index:19, name:'Conv_19',   type:'Conv',     shape:[1,128,20,20],  from:[18] },
+        { index:20, name:'Concat_20', type:'Concat',   shape:[1,384,20,20],  from:[19,9] },
+        { index:21, name:'C2f_21',    type:'C2f',      shape:[1,256,20,20],  from:[20] },
+        { index:22, name:'Detect_22', type:'Detect',   shape:[],             from:[15,18,21] },
+    ];
+    _placeLayers(arch);
+    _setText('metricLayers', arch.length);
+}
+
+function _placeLayers(pipeline) {
+    const N = pipeline.length;
+    const totalW = (N - 1) * LAYER_GAP;
+
+    pipeline.forEach((stage, i) => {
+        const x = i * LAYER_GAP - totalW / 2;
+        const channels = stage.shape && stage.shape.length >= 3 ? stage.shape[stage.shape.length - 3] : 32;
+        const depth = Math.max(LAYER_D_BASE, Math.min(22, Math.log2(channels + 1) * 1.5));
+
+        const geo = new THREE.BoxGeometry(LAYER_W * lv.nodeScale, LAYER_H * lv.nodeScale, depth * lv.nodeScale);
+        const mat = new THREE.MeshStandardMaterial({
+            color: typeColor(stage.type),
+            roughness: 0.35, metalness: 0.55,
+            emissive: new THREE.Color(0.08, 0.01, 0.25),
+            emissiveIntensity: 0.3
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, 0, 0);
+        mesh.userData = { idx: stage.index, name: stage.name, type: stage.type, shape: stage.shape, from: stage.from };
+
+        const edgeGeo = new THREE.EdgesGeometry(geo);
+        const edgeMat = new THREE.LineBasicMaterial({ color: typeColor(stage.type), transparent: true, opacity: 0.5 });
+        const edgeMesh = new THREE.LineSegments(edgeGeo, edgeMat);
+        mesh.add(edgeMesh);
+
+        lv.layerGroup.add(mesh);
+        lv.layerMeshes.push({ mesh, edgeMesh, idx: stage.index, name: stage.name, type: stage.type, shape: stage.shape });
+
+        // Skip connection arcs from real from[] indices
+        (stage.from || []).forEach(srcIdx => {
+            if (srcIdx < 0 || stage.index - srcIdx <= 1) return;
+            const src = lv.layerMeshes.find(m => m.idx === srcIdx);
+            if (!src) return;
+            lv.connectionGroup.add(_buildArc(src.mesh.position.x, x, Math.abs(x - src.mesh.position.x) * 0.4));
+        });
+    });
+
+    lv.target.set(0, 0, 0);
+    lv.lastPipeline = pipeline;
+}
+
+function _buildArc(x1, x2, h) {
+    const pts = [];
+    for (let i = 0; i <= 24; i++) {
+        const t = i / 24;
+        pts.push(new THREE.Vector3(x1 + (x2-x1)*t, Math.sin(Math.PI*t)*h, 0));
+    }
+    return new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(pts),
+        new THREE.LineBasicMaterial({ color: 0x7c3aed, transparent: true, opacity: 0.65 })
+    );
+}
+
+// ---- Load real running jobs from API ----
+async function loadJobs() {
+    const sel = document.getElementById('jobSelect');
+    try {
+        const r = await fetch('/api/training/jobs');
+        const jobs = await r.json();
+        sel.innerHTML = '<option value="">— Select Job —</option>';
+        jobs.forEach(j => {
+            const opt = document.createElement('option');
+            opt.value = j.pythonJobId || '';
+            opt.dataset.totalEpochs = j.totalEpochs;
+            opt.textContent = `${j.name || j.id} [${j.status}] ${j.yoloVersion || ''} ${j.baseModel || ''}`.trim();
+            if (j.status === 'Running') opt.style.color = '#10b981';
+            sel.appendChild(opt);
+        });
+        if (jobs.length === 0) sel.innerHTML = '<option value="">No training jobs found</option>';
+    } catch {
+        sel.innerHTML = '<option value="">Failed to load jobs</option>';
+    }
+}
+
+// ---- Connect to running job WebSocket ----
+function connectToJob() {
+    const sel = document.getElementById('jobSelect');
+    const pyId = sel.value;
+    const opt = sel.options[sel.selectedIndex];
+    lv.totalEpochs = parseInt(opt?.dataset?.totalEpochs || '100') || 100;
+
+    if (ws) { try { ws.close(); } catch {} ws = null; }
+    if (!pyId) { setStatus('Idle'); return; }
+
+    currentPythonJobId = pyId;
+    const url = AI_ENGINE.replace('http', 'ws') + `/ws/training/${pyId}`;
+    ws = new WebSocket(url);
+    ws.onopen  = () => setStatus('Live');
+    ws.onmessage = e => { try { handleLiveMsg(JSON.parse(e.data)); } catch {} };
+    ws.onclose = () => setStatus('Offline');
+    ws.onerror = () => setStatus('Error');
+}
+
+function handleLiveMsg(msg) {
+    if (msg.metrics) applyMetrics(msg.metrics);
+    if (msg.frame)   applyFrame(msg.frame);
+    if (msg.pipeline) applyPipeline(msg.pipeline);
+    if (msg.grad_norms) applyGradNorms(msg.grad_norms);
+    if (msg.status) {
+        const badge = document.getElementById('trainingStatus');
+        if (msg.status === 'running') { badge.textContent = 'Training'; badge.className = 'status-badge status-training'; }
+        else { badge.textContent = msg.status; badge.className = 'status-badge status-idle'; }
+    }
+}
+
+function applyMetrics(m) {
+    _flashMetric('metricEpoch',   m.epoch   != null ? `${m.epoch}/${lv.totalEpochs}` : null);
+    _flashMetric('metricBatch',   m.batch);
+    _flashMetric('metricBoxLoss', m.box_loss   != null ? m.box_loss.toFixed(4)   : null);
+    _flashMetric('metricClsLoss', m.cls_loss   != null ? m.cls_loss.toFixed(4)   : null);
+    _flashMetric('metricDflLoss', m.dfl_loss   != null ? m.dfl_loss.toFixed(4)   : null);
+    _flashMetric('metricMap',     m.map50      != null && m.map50 > 0 ? m.map50.toFixed(3) : null);
+    _flashMetric('metricLR',      m.lr         != null ? Number(m.lr).toExponential(2) : null);
+
+    if (m.epoch != null && lv.totalEpochs > 0) {
+        const pct = Math.min(100, (m.epoch / lv.totalEpochs) * 100);
+        document.getElementById('epochProgress').style.width = pct + '%';
+        document.getElementById('progressText').textContent = pct.toFixed(1) + '% Complete';
+    }
+    lv.currentLoss = (m.box_loss || 0) + (m.cls_loss || 0) + (m.dfl_loss || 0);
+}
+
+function applyFrame(frame) {
+    // Update textures on layer faces from real activation thumbnails
+    if (!lv.initialized) return;
+    (frame.pipeline || []).forEach(stage => {
+        const thumb = (stage.thumbs || [])[0];
+        if (!thumb) return;
+        if (!lv.layerTextures[stage.index]) lv.layerTextures[stage.index] = new THREE.Texture();
+        const tex = lv.layerTextures[stage.index];
+        const img = new Image();
+        img.onload = () => { tex.image = img; tex.needsUpdate = true; };
+        img.src = `data:image/jpeg;base64,${thumb}`;
+        const entry = lv.layerMeshes.find(m => m.idx === stage.index);
+        if (entry && entry.mesh.material && lv.vizMode !== 'gradient') {
+            entry.mesh.material.map = tex;
+            entry.mesh.material.needsUpdate = true;
+        }
+    });
+}
+
+function applyPipeline(pipeline) {
+    if (!lv.initialized || !pipeline.length) return;
+    lv.lastPipeline = pipeline;
+    // Rebuild if layer count changed
+    if (pipeline.length !== lv.layerMeshes.length) {
+        _placeLayers(pipeline);
+        _setText('metricLayers', pipeline.length);
+    }
+}
+
+function applyGradNorms(gradNorms) {
+    if (!lv.initialized) return;
+    lv.lastGradNorms = gradNorms;
+    const idxs = Object.keys(gradNorms).map(Number);
+    const mx = Math.max(...Object.values(gradNorms), 1e-9);
+
+    lv.layerMeshes.forEach(({mesh, edgeMesh, idx}) => {
+        const gn = gradNorms[idx] || 0;
+        const norm = gn / mx;
+        if (mesh.material) {
+            mesh.material.emissive = new THREE.Color(norm * 0.9, 0.05, (1 - norm) * 0.3);
+            mesh.material.emissiveIntensity = norm * 1.4;
+        }
+        if (edgeMesh && edgeMesh.material) {
+            edgeMesh.material.color = new THREE.Color(norm * 0.9 + 0.1, 0.05, (1-norm)*0.3+0.1);
+            edgeMesh.material.opacity = 0.4 + norm * 0.6;
+        }
+    });
+}
+
+function showLayerHud(userData) {
+    document.getElementById('liName').textContent     = `#${userData.idx} ${userData.name || ''}`;
+    document.getElementById('liType').textContent     = userData.type || '–';
+    document.getElementById('liShape').textContent    = (userData.shape || []).join('×') || '–';
+    const gn = lv.lastGradNorms[userData.idx];
+    document.getElementById('liGrad').textContent     = gn != null ? gn.toFixed(4) : '–';
+    const stage = lv.lastPipeline.find(s => s.index === userData.idx);
+    document.getElementById('liActRange').textContent = stage?.scale ? `${stage.scale.vmin} → ${stage.scale.vmax}` : '–';
+    document.getElementById('layerInfo').style.display = 'block';
+}
+
+// ---- Controls ----
+function applyVizMode() {
+    lv.vizMode = document.getElementById('vizMode').value;
+    if (lv.vizMode === 'gradient') {
+        // Remove textures, show only gradient glow
+        lv.layerMeshes.forEach(({mesh}) => { if (mesh.material) { mesh.material.map = null; mesh.material.needsUpdate = true; }});
+    }
+}
+
+function applyNodeScale() {
+    lv.nodeScale = parseFloat(document.getElementById('nodeSize').value);
+    // Rebuild meshes at new scale
+    if (lv.lastPipeline.length) _placeLayers(lv.lastPipeline);
+}
+
+function toggleAutoRotate() {
+    lv.autoRotating = !lv.autoRotating;
+    const btn = document.getElementById('rotateBtn');
+    btn.innerHTML = lv.autoRotating
+        ? '<i class="fas fa-pause" style="margin-right:6px;"></i>Stop Rotate'
+        : '<i class="fas fa-sync" style="margin-right:6px;"></i>Auto Rotate';
+}
+
+function resetView() {
+    lv.phi = 0.35; lv.theta = 0; lv.radius = 200;
+    if (lv.target) lv.target.set(0, 0, 0);
+    _updateCam();
+}
+
+function setStatus(text) {
+    const el = document.getElementById('wsState');
+    if (el) el.textContent = text;
+}
+
+function _setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+function _flashMetric(id, val) {
+    if (val == null) return;
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = val;
+    el.classList.add('updating');
+    setTimeout(() => el.classList.remove('updating'), 500);
+}
+
+// ---- Boot ----
+window.addEventListener('DOMContentLoaded', () => {
+    initThree();
+    loadJobs();
+});
+</script>
+}

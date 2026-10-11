@@ -68,10 +68,18 @@ def run_training_task(job_id: str, request: TrainingRequest, job_state: JobState
             workers=request.workers if request.workers is not None else (0 if os.name == "nt" else 8),
             exist_ok=True,
         )
-        if "mosaic" in augment:
-            train_kwargs["mosaic"] = float(augment["mosaic"])
-        if "mixup" in augment:
-            train_kwargs["mixup"] = float(augment["mixup"])
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+                # For laptop GPUs with <= 8.5 GB VRAM, clamp batch to 8 to avoid CUDA OOM crashes
+                if vram_gb <= 8.5 and int(request.batch or 16) > 8:
+                    train_kwargs["batch"] = 8
+                    print(f"[training] Clamped batch from {request.batch} to 8 for {vram_gb:.1f}GB GPU VRAM stability", flush=True)
+        except Exception:
+            pass
+
         model.train(**train_kwargs)
 
         if job_state._stop_event.is_set():

@@ -15,5 +15,15 @@ namespace YOLOVisionStudio.Hubs
         {
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, jobId);
         }
+
+        public async Task SubscribeToJob(string jobId)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"job_{jobId}");
+        }
+
+        public async Task UnsubscribeFromJob(string jobId)
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"job_{jobId}");
+        }
     }
 }

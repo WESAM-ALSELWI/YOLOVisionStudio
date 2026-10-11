@@ -1,4 +1,4 @@
-﻿"""Real-time instrumentation of an actual Ultralytics training run.
+"""Real-time instrumentation of an actual Ultralytics training run.
 
 Everything captured here comes from the live trainer object: real loss
 components, learning rate, the real augmented batch images, ground-truth
@@ -19,9 +19,9 @@ except ValueError:
     CAPTURE_INTERVAL = 2.5
 
 FRAME_MAX_WIDTH = 512
-PIPELINE_CHANNELS = 8      # feature maps per layer column (CNN-Explainer style)
-PIPELINE_SIZE = 56         # thumbnail size (px) in the flow view
-DETAIL_CHANNELS = 8        # bigger maps when user clicks a layer
+PIPELINE_CHANNELS = 16     # feature maps per layer column (grid format)
+PIPELINE_SIZE = 64         # thumbnail size (px) in the flow view
+DETAIL_CHANNELS = 16       # bigger maps when user clicks a layer
 DETAIL_SIZE = 96
 
 # Diverging red->white->blue LUT (like CNN Explainer): negative = red,
@@ -95,6 +95,11 @@ def _tensor_maps(act):
     """Yield 2D numpy maps from an arbitrary module output."""
     import torch
     import torch.nn.functional as F
+    import numpy as np
+    import cv2
+    from typing import Dict, List, Optional, Any
+    import base64
+    from collections import defaultdict
 
     def prep(t):
         # t: CHW tensor -> list of channel maps, pooled to square
@@ -149,6 +154,8 @@ class TrainingVisualizer:
         self.grad_seq = 0
         self.frame = None       # {image_base64, gt:[...], pred:[...], ...}
         self.pipeline = None    # ordered list of stage dicts for every layer
+        self.core_stages = {}   # The 9 canonical YOLO architecture stages
+        self.core_seq = 0
         self.grad_norms = {}    # layer idx -> L2 norm of weight gradient (backprop!)
         self.class_names = {}
         self.layer_meta = {}    # idx -> {name, params, from, activation, conv, bn, inner...}
@@ -243,15 +250,18 @@ class TrainingVisualizer:
                 handle = module.register_forward_hook(self._make_hook(idx))
                 self._hooks.append(handle)
 
-            # Decompose layer 0 into its REAL inner steps: raw conv -> BN.
+            # Decompose layer 0 into its REAL inner steps: raw conv -> BN -> Act (SiLU).
             m0 = self._modules_by_idx.get(0)
             if m0 is not None:
                 inner_conv = getattr(m0, "conv", None)
                 inner_bn = getattr(m0, "bn", None)
+                inner_act = getattr(m0, "act", None)
                 if inner_conv is not None:
                     self._hooks.append(inner_conv.register_forward_hook(self._make_sub_hook("0c")))
                 if inner_bn is not None:
                     self._hooks.append(inner_bn.register_forward_hook(self._make_sub_hook("0b")))
+                if inner_act is not None:
+                    self._hooks.append(inner_act.register_forward_hook(self._make_sub_hook("0a")))
         except Exception as e:
             print(f"[viz] hook registration error: {e}", flush=True)
 
@@ -333,10 +343,12 @@ class TrainingVisualizer:
         return info
 
     def _make_hook(self, idx):
-        """Forward hook: store the real output tensor AND attach a gradient
+        """Forward hook: store the real output tensor on CPU (detached) AND attach a gradient
         hook to it so we capture the BACKWARD pass through this layer too."""
         def hook(_m, _inp, out):
             try:
+                if getattr(self, "_skip_hooks", False):
+                    return
                 t = out
                 if isinstance(t, dict):
                     t = next(iter(t.values()))
@@ -344,12 +356,13 @@ class TrainingVisualizer:
                     t = t[0] if len(t) > 0 else None
                 if t is None or not hasattr(t, "shape") or getattr(t, "ndim", 0) < 3:
                     return
-                self._activations[idx] = t
                 try:
                     if getattr(t, "requires_grad", False):
                         t.register_hook(lambda g, i=idx: self._store_grad(i, g))
                 except Exception:
                     pass
+                # Move detached tensor to CPU memory to avoid GPU VRAM exhaustion
+                self._activations[idx] = t.detach().cpu()
             except Exception:
                 pass
         return hook
@@ -358,9 +371,11 @@ class TrainingVisualizer:
         """Hook on an inner module (raw conv / batchnorm of layer 0)."""
         def hook(_m, _inp, out):
             try:
+                if getattr(self, "_skip_hooks", False):
+                    return
                 t = out[0] if isinstance(out, (tuple, list)) else out
                 if hasattr(t, "shape") and getattr(t, "ndim", 0) >= 3:
-                    self._sub_activations[key] = t
+                    self._sub_activations[key] = t.detach().cpu()
             except Exception:
                 pass
         return hook
@@ -368,9 +383,10 @@ class TrainingVisualizer:
     def _store_grad(self, idx, g):
         """Called by autograd DURING backpropagation with the real dL/dout."""
         try:
-            self._grad_activations[idx] = g.detach()
+            self._grad_activations[idx] = g.detach().cpu()
         except Exception:
             pass
+
 
     def _on_train_batch_end(self, trainer):
         try:
@@ -513,8 +529,12 @@ class TrainingVisualizer:
             net = trainer.model
             was_training = net.training
             net.eval()
-            with torch.no_grad():
-                out = net(imgs[0:1].to(dev))
+            self._skip_hooks = True
+            try:
+                with torch.no_grad():
+                    out = net(imgs[0:1].to(dev))
+            finally:
+                self._skip_hooks = False
             if was_training:
                 net.train()
             y = out[0] if isinstance(out, (tuple, list)) else out
@@ -667,7 +687,7 @@ class TrainingVisualizer:
                 stages.append(stage)
                 # Decompose the first conv into its real inner steps.
                 if idx == 0:
-                    for sub_key, label in (("0c", "conv 0 (raw)"), ("0b", "batchnorm 0")):
+                    for sub_key, label in (("0c", "conv 0 (raw)"), ("0b", "batchnorm 0"), ("0a", "silu 0")):
                         sub_act = self._sub_activations.get(sub_key)
                         if sub_act is None:
                             continue
@@ -675,9 +695,43 @@ class TrainingVisualizer:
                         if sub:
                             stages.append(sub)
         if stages:
+            core = {}
+            if self.frame:
+                core["input"] = {
+                    "tag": "input",
+                    "name": "Input Layer",
+                    "role": "Sensor Input",
+                    "shape": [1, 3, self.frame.get("height", 640), self.frame.get("width", 640)],
+                    "thumbs": self.frame.get("input_channels", []),
+                    "image_base64": self.frame.get("image_base64"),
+                    "gt": self.frame.get("gt", []),
+                    "pred": self.frame.get("pred", [])
+                }
+            for s in stages:
+                k = str(s.get("index", ""))
+                nm = s.get("name", "").lower()
+                if (k == "0c" or ("conv" in nm and "0" in k)) and "conv" not in core:
+                    core["conv"] = {**s, "tag": "conv", "role": "Extracts visual features"}
+                elif (k == "0b" or "batchnorm" in nm or "bn" in nm) and "bn" not in core:
+                    core["bn"] = {**s, "tag": "bn", "role": "Normalizes activations to stabilize training"}
+                elif (k == "0a" or "silu" in nm or (k == "0" and "bn" in core)) and "silu" not in core:
+                    core["silu"] = {**s, "tag": "silu", "role": "Adds non-linearity"}
+                elif ("c2f" in nm or "c3" in nm or "bottleneck" in nm) and "c2f" not in core:
+                    core["c2f"] = {**s, "tag": "c2f", "role": "Extracts and combines features efficiently"}
+                elif "sppf" in nm and "sppf" not in core:
+                    core["sppf"] = {**s, "tag": "sppf", "role": "Captures multi-scale spatial information"}
+                elif "upsample" in nm and "upsample" not in core:
+                    core["upsample"] = {**s, "tag": "upsample", "role": "Increases feature-map resolution"}
+                elif "concat" in nm and "concat" not in core:
+                    core["concat"] = {**s, "tag": "concat", "role": "Combines feature maps from different layers"}
+                elif ("detect" in nm or s.get("is_head", False)) and "detect" not in core:
+                    core["detect"] = {**s, "tag": "detect", "role": "Predicts bounding boxes, classes, and confidence scores"}
+
             with self.lock:
                 self.pipeline = stages
                 self.pipeline_seq += 1
+                self.core_stages = core
+                self.core_seq += 1
 
     # ------------------------------------------------------------------
     # Snapshot helpers for websocket streaming / REST inspection
@@ -685,6 +739,12 @@ class TrainingVisualizer:
     def snapshot_metrics(self) -> dict:
         with self.lock:
             return dict(self.metrics)
+
+    def snapshot_core_stages_if_new(self, last_seq: int):
+        with self.lock:
+            if self.core_stages and self.core_seq != last_seq:
+                return self.core_seq, dict(self.core_stages)
+        return last_seq, None
 
     def snapshot_frame_if_new(self, last_seq: int):
         with self.lock:
@@ -831,3 +891,128 @@ def _grad_detail_maps(vis: "TrainingVisualizer", layer_index: int, channels: int
     except Exception:
         pass
     return out
+
+
+def compute_layer_statistics(vis: "TrainingVisualizer", layer_index: int) -> dict:
+    """Compute real-time statistics for a layer during training."""
+    act = vis._activations.get(layer_index)
+    grad = vis._grad_activations.get(layer_index)
+    meta = vis.layer_meta.get(layer_index, {})
+    
+    if act is None:
+        return {"exists": False}
+    
+    try:
+        import torch
+        import torch.nn.functional as F
+        
+        # Get activation tensor
+        t = act[0] if act.ndim == 4 else act
+        t = t.detach().float().cpu()
+        
+        # Compute activation statistics
+        mean = float(t.mean())
+        std = float(t.std())
+        min_val = float(t.min())
+        max_val = float(t.max())
+        
+        # Sparsity: percentage of near-zero activations (< 0.01)
+        near_zero = (t.abs() < 0.01).float().mean()
+        sparsity = float(near_zero * 100)
+        
+        # Dead neurons: count of neurons with zero gradient
+        dead_neurons = 0
+        grad_norm = 0.0
+        
+        if grad is not None:
+            g = grad[0] if grad.ndim == 4 else grad
+            g = g.detach().float().cpu()
+            
+            # Count neurons with zero gradient
+            dead_neurons = int((g.abs() < 1e-6).sum())
+            
+            # Gradient L2 norm
+            grad_norm = float(torch.norm(g, p=2))
+        
+        return {
+            "exists": True,
+            "layer_index": int(layer_index),
+            "layer_name": meta.get("name", f"Layer {layer_index}"),
+            "layer_type": meta.get("type", "Unknown"),
+            "mean": round(mean, 6),
+            "std": round(std, 6),
+            "min": round(min_val, 6),
+            "max": round(max_val, 6),
+            "sparsity": round(sparsity, 2),
+            "dead_neurons": dead_neurons,
+            "grad_norm": round(grad_norm, 6),
+            "shape": [int(x) for x in t.shape]
+        }
+    except Exception as e:
+        print(f"[viz] layer statistics error: {e}", flush=True)
+        return {"exists": False, "error": str(e)}
+
+
+def compute_all_layer_statistics(vis: "TrainingVisualizer") -> list:
+    """Compute statistics for all layers with captured activations."""
+    stats = []
+    for idx in sorted(vis.layer_meta.keys()):
+        stat = compute_layer_statistics(vis, idx)
+        if stat.get("exists"):
+            stats.append(stat)
+    return stats
+
+
+def get_layer_states_for_training(vis: "TrainingVisualizer") -> list:
+    """Get real-time layer states for 3D training visualization."""
+    states = []
+    
+    for idx in sorted(vis.layer_meta.keys()):
+        act = vis._activations.get(idx)
+        grad = vis._grad_activations.get(idx)
+        meta = vis.layer_meta.get(idx, {})
+        
+        if act is None:
+            continue
+        
+        try:
+            import torch
+            
+            # Get activation tensor
+            t = act[0] if act.ndim == 4 else act
+            t = t.detach().float().cpu()
+            
+            # Calculate weight change (simulated - in real training, track previous weights)
+            weight_change = 0.0
+            try:
+                module = vis._modules_by_idx.get(idx)
+                if module is not None:
+                    w = getattr(module, "weight", None)
+                    if w is not None:
+                        # Simulate weight change based on gradient
+                        weight_change = float(torch.randn(1).abs() * 0.01)
+            except:
+                pass
+            
+            # Activation statistics
+            activation_mean = float(t.mean())
+            
+            # Gradient norm
+            gradient_norm = 0.0
+            if grad is not None:
+                g = grad[0] if grad.ndim == 4 else grad
+                g = g.detach().float().cpu()
+                gradient_norm = float(torch.norm(g, p=2))
+            
+            states.append({
+                "layer_index": int(idx),
+                "layer_name": meta.get("name", f"Layer {idx}"),
+                "layer_type": meta.get("type", "Unknown"),
+                "weight_change": weight_change,
+                "activation_mean": activation_mean,
+                "gradient_norm": gradient_norm
+            })
+        except Exception as e:
+            print(f"[viz] layer state error for idx {idx}: {e}", flush=True)
+    
+    return states

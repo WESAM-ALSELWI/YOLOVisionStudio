@@ -1,0 +1,1948 @@
+@{
+    ViewData["Title"] = "YOLO 3D Neural Architecture & Image Flow Visualizer";
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>YOLO — Live 3D Neural Network & Image Flow</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;background:#000;font-family:'Segoe UI',system-ui,sans-serif;color:#e2e8f0;overflow:hidden}
+#canvas-container{position:fixed;inset:0;width:100%;height:100%;background:#000}
+#c{display:block;width:100%;height:100%}
+
+/* ─── TOP NAVIGATION ─── */
+.nav{position:fixed;top:0;left:0;right:0;height:46px;background:rgba(5,5,12,.94);
+  border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;
+  padding:0 14px;gap:10px;z-index:70;backdrop-filter:blur(14px)}
+.logo{font-size:.9rem;font-weight:900;color:#fff;letter-spacing:.02em;display:flex;align-items:center;gap:6px}
+.logo-badge{background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;font-size:.65rem;padding:2px 7px;border-radius:4px;font-weight:800}
+.logo span{color:#60a5fa}
+.vsep{width:1px;height:20px;background:rgba(255,255,255,.12)}
+.jsel{background:rgba(255,255,255,.06);border:1px solid rgba(59,130,246,.35);color:#e2e8f0;
+  padding:4px 10px;border-radius:6px;font-size:.76rem;min-width:210px;outline:none}
+.wsbadge{padding:3px 9px;border-radius:20px;font-size:.65rem;font-weight:800;letter-spacing:.03em}
+.b-idle{background:rgba(107,114,128,.2);color:#9ca3af;border:1px solid rgba(107,114,128,.35)}
+.b-live{background:rgba(16,185,129,.18);color:#34d399;border:1px solid rgba(16,185,129,.5);
+  animation:blv .9s ease-in-out infinite alternate}
+.b-err{background:rgba(239,68,68,.18);color:#f87171;border:1px solid rgba(239,68,68,.4)}
+@@keyframes blv{from{box-shadow:0 0 4px rgba(16,185,129,.3)}to{box-shadow:0 0 16px rgba(16,185,129,.6)}}
+.nbtn{padding:4px 10px;border-radius:6px;font-size:.73rem;font-weight:600;cursor:pointer;
+  border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#cbd5e1;
+  transition:all .18s;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+.nbtn:hover{background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.45);color:#93c5fd}
+.nbtn.on{background:rgba(59,130,246,.25);border-color:#3b82f6;color:#bfdbfe}
+.mode-pill-group{display:inline-flex;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:2px}
+.mode-pill{padding:3px 8px;border-radius:4px;font-size:.68rem;font-weight:700;border:none;background:none;color:#94a3b8;cursor:pointer;transition:all .15s}
+.mode-pill.active{background:#2563eb;color:#fff}
+
+/* ─── 9 CORE ARCHITECTURAL STAGES RIBBON ─── */
+.arch-ribbon{position:fixed;top:46px;left:0;right:0;height:36px;background:rgba(2,4,10,.94);
+  border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;
+  padding:0 12px;gap:6px;z-index:65;overflow-x:auto;backdrop-filter:blur(10px)}
+.arch-ribbon::-webkit-scrollbar{display:none}
+.arch-tag{font-size:.6rem;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.08em;margin-right:4px;white-space:nowrap}
+.arch-pill{padding:4px 10px;border-radius:15px;font-size:.69rem;font-weight:700;cursor:pointer;
+  border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);color:#94a3b8;
+  white-space:nowrap;transition:all .2s;display:inline-flex;align-items:center;gap:4px}
+.arch-pill:hover{background:rgba(59,130,246,.15);border-color:#3b82f6;color:#e2e8f0;transform:translateY(-1px)}
+.arch-pill.active{background:linear-gradient(135deg,rgba(59,130,246,.28),rgba(139,92,246,.28));
+  border-color:#60a5fa;color:#fff;box-shadow:0 0 12px rgba(96,165,250,.4)}
+
+/* ─── PHASE STRIP ─── */
+.phstrip{position:fixed;top:82px;left:0;right:0;height:26px;background:rgba(3,3,8,.85);
+  border-bottom:1px solid rgba(255,255,255,.05);display:flex;z-index:60;backdrop-filter:blur(8px)}
+.ph{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;
+  font-size:.62rem;font-weight:700;color:#374151;transition:all .35s;
+  border-right:1px solid rgba(255,255,255,.04)}
+.ph:last-child{border-right:none}
+.ph.af{color:#60a5fa;background:rgba(59,130,246,.1);text-shadow:0 0 10px rgba(96,165,250,.6)}
+.ph.ab{color:#f43f5e;background:rgba(244,63,94,.1);text-shadow:0 0 10px rgba(244,63,94,.6)}
+.ph.au{color:#34d399;background:rgba(16,185,129,.1);text-shadow:0 0 10px rgba(52,211,153,.6)}
+
+/* ─── LEFT HUD: LIVE METRICS ─── */
+.hud-left{position:fixed;top:118px;left:12px;width:190px;background:rgba(5,5,14,.9);
+  border:1px solid rgba(59,130,246,.25);border-radius:12px;padding:12px;z-index:50;
+  backdrop-filter:blur(14px);box-shadow:0 8px 30px rgba(0,0,0,.6)}
+.hud-hd{font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;
+  color:#60a5fa;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+.ldot{width:6px;height:6px;border-radius:50%;background:#10b981;animation:ld 1.4s ease-in-out infinite}
+@@keyframes ld{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.2;transform:scale(1.3)}}
+.mr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;font-size:.72rem}
+.mk{color:#475569}.mv{font-weight:700;font-family:monospace;color:#f1f5f9}
+.mv.g{color:#34d399}.mv.w{color:#fbbf24}.mv.r{color:#f87171}
+.pb{height:5px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden;margin:8px 0 3px}
+.pf{height:100%;background:linear-gradient(90deg,#3b82f6,#06b6d4);border-radius:3px;transition:width .6s}
+.ptxt{font-size:.58rem;color:#475569;text-align:center}
+.sep{height:1px;background:rgba(255,255,255,.07);margin:9px 0}
+.hud-title{font-size:.58rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+.gbars{display:flex;align-items:flex-end;gap:1.5px;height:32px;margin-top:4px}
+.gbar-item{flex:1;min-width:2px;border-radius:1px 1px 0 0;transition:height .3s}
+.gbarlbl{display:flex;justify-content:space-between;font-size:.54rem;color:#334155;margin-top:3px}
+
+/* ─── RIGHT HUD: ARCHITECTURE INSPECTOR ─── */
+.hud-right{position:fixed;top:118px;right:12px;width:235px;background:rgba(5,5,14,.9);
+  border:1px solid rgba(139,92,246,.25);border-radius:12px;padding:12px;z-index:50;
+  backdrop-filter:blur(14px);box-shadow:0 8px 30px rgba(0,0,0,.6);max-height:calc(100vh - 280px);overflow-y:auto}
+.hud-right::-webkit-scrollbar{width:4px}
+.hud-right::-webkit-scrollbar-thumb{background:#334155;border-radius:2px}
+.rh-hd{font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#a78bfa;margin-bottom:6px}
+.legend-box{display:flex;flex-direction:column;gap:5px;margin-bottom:10px;font-size:.66rem}
+.leg-row{display:flex;align-items:center;gap:7px;color:#94a3b8}
+.leg-line{width:16px;height:3px;border-radius:2px}
+.leg-blue{background:#3b82f6;box-shadow:0 0 6px rgba(59,130,246,.8)}
+.leg-red{background:#f43f5e;box-shadow:0 0 6px rgba(244,63,94,.8)}
+.leg-white{background:#f8fafc;box-shadow:0 0 6px rgba(248,250,252,.6)}
+
+.insp-box{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:9px;margin-top:6px}
+.insp-name{font-weight:800;font-size:.78rem;color:#60a5fa;margin-bottom:4px}
+.insp-row{display:flex;justify-content:space-between;font-size:.67rem;margin-bottom:3px}
+.insp-k{color:#64748b}.insp-v{color:#f1f5f9;font-family:monospace;font-weight:600}
+.insp-btn{width:100%;margin-top:8px;padding:7px;border-radius:6px;background:linear-gradient(135deg,#2563eb,#7c3aed);border:none;color:#fff;font-weight:700;font-size:.72rem;cursor:pointer;transition:transform .15s}
+.insp-btn:hover{transform:scale(1.02)}
+
+/* ─── REAL-TIME IMAGE STATUS FLOW TRAY (BOTTOM DOCK) ─── */
+.image-tray{position:fixed;bottom:36px;left:0;right:0;background:rgba(3,5,12,.94);
+  border-top:1px solid rgba(59,130,246,.3);z-index:58;padding:8px 14px 6px;backdrop-filter:blur(16px);
+  box-shadow:0 -10px 30px rgba(0,0,0,.7);transition:transform .3s ease}
+.image-tray.collapsed{transform:translateY(calc(100% - 30px))}
+.tray-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;cursor:pointer}
+.tray-title{font-size:.74rem;font-weight:800;color:#60a5fa;display:flex;align-items:center;gap:6px;letter-spacing:.03em;text-transform:uppercase}
+.tray-toggle-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#cbd5e1;padding:2px 8px;border-radius:4px;font-size:.66rem;font-weight:700;cursor:pointer}
+.tray-grid{display:grid;grid-template-columns:repeat(9, minmax(130px, 1fr));gap:8px;overflow-x:auto;padding-bottom:4px}
+.tray-grid::-webkit-scrollbar{height:4px}
+.tray-grid::-webkit-scrollbar-thumb{background:#334155;border-radius:2px}
+.tray-card{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:8px;
+  padding:6px;cursor:pointer;transition:all .18s;position:relative;display:flex;flex-direction:column}
+.tray-card:hover{background:rgba(59,130,246,.12);border-color:#3b82f6;transform:translateY(-2px)}
+.tray-card.active{border-color:#60a5fa;background:rgba(59,130,246,.18);box-shadow:0 0 12px rgba(96,165,250,.35)}
+.tc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.tc-title{font-size:.66rem;font-weight:800;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-badge{font-size:.52rem;padding:1px 5px;border-radius:3px;font-weight:700;text-transform:uppercase}
+.tc-canvas-wrap{width:100%;aspect-ratio:1;border-radius:5px;overflow:hidden;background:#000;
+  border:1px solid rgba(255,255,255,.08);margin-bottom:4px;position:relative}
+.tc-canvas-wrap canvas{width:100%;height:100%;object-fit:cover;display:block}
+.tc-role{font-size:.56rem;color:#64748b;line-height:1.2;height:24px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.tc-status{font-size:.54rem;font-family:monospace;color:#38bdf8;margin-top:2px;font-weight:600}
+
+/* ─── DEEP-DIVE STAGE MODAL (Image Status + Dual Explanations) ─── */
+.stage-modal{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:95;display:none;
+  align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px)}
+.sm-content{background:#080b14;border:1px solid rgba(59,130,246,.4);border-radius:14px;
+  width:100%;max-width:860px;max-height:92vh;overflow-y:auto;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.8)}
+.sm-content::-webkit-scrollbar{width:6px}
+.sm-content::-webkit-scrollbar-thumb{background:#334155;border-radius:3px}
+.sm-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:12px}
+.sm-title{font-size:1.25rem;font-weight:900;color:#fff;display:flex;align-items:center;gap:8px}
+.sm-badge{font-size:.68rem;padding:3px 9px;border-radius:12px;font-weight:800;text-transform:uppercase}
+.sm-close{background:none;border:none;color:#64748b;font-size:1.4rem;cursor:pointer;padding:4px}
+.sm-close:hover{color:#fff}
+
+.mode-toggle{display:inline-flex;background:rgba(255,255,255,.06);padding:3px;border-radius:8px;border:1px solid rgba(255,255,255,.1)}
+.mode-btn{padding:5px 14px;border-radius:6px;border:none;background:none;color:#94a3b8;font-size:.74rem;font-weight:700;cursor:pointer;transition:all .18s}
+.mode-btn.active{background:#2563eb;color:#fff;box-shadow:0 0 10px rgba(37,99,235,.5)}
+
+.image-status-section{margin:18px 0;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:16px}
+.is-title{font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#38bdf8;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.is-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+.is-card{background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;text-align:center}
+.is-card-title{font-size:.72rem;font-weight:700;color:#cbd5e1;margin-bottom:6px}
+.is-img-wrap{aspect-ratio:1;border-radius:6px;overflow:hidden;background:#030712;display:flex;align-items:center;justify-content:center;margin-bottom:8px;border:1px solid rgba(255,255,255,.1)}
+.is-img-wrap canvas, .is-img-wrap img{width:100%;height:100%;object-fit:cover;display:block}
+.is-card-desc{font-size:.66rem;color:#64748b;line-height:1.4;text-align:left}
+
+.sm-explain-box{background:rgba(30,41,59,.4);border-left:4px solid #3b82f6;border-radius:0 8px 8px 0;padding:14px;margin-top:14px}
+.sm-exp-hd{font-size:.78rem;font-weight:800;color:#93c5fd;margin-bottom:6px}
+.sm-exp-body{font-size:.82rem;line-height:1.6;color:#cbd5e1}
+.sm-math-box{background:#000;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:10px;margin-top:10px;font-family:monospace;font-size:.78rem;color:#38bdf8;overflow-x:auto}
+
+/* ─── HOVER TOOLTIP ─── */
+.tip{position:fixed;background:rgba(2,2,10,.96);border:1.5px solid #3b82f6;
+  border-radius:9px;padding:10px 14px;min-width:180px;font-size:.72rem;display:none;
+  z-index:90;pointer-events:none;backdrop-filter:blur(10px);box-shadow:0 0 20px rgba(59,130,246,.4)}
+.tipname{color:#60a5fa;font-weight:800;margin-bottom:5px;font-size:.82rem}
+.tipr{display:flex;justify-content:space-between;margin-bottom:3px}
+.tipk{color:#64748b}.tipv{color:#f1f5f9;font-family:monospace;font-weight:700}
+
+/* ─── BOTTOM BAR ─── */
+.bot{position:fixed;bottom:0;left:0;right:0;height:36px;background:rgba(5,5,12,.94);
+  border-top:1px solid rgba(255,255,255,.06);display:flex;align-items:center;
+  padding:0 14px;gap:18px;font-size:.68rem;z-index:60;backdrop-filter:blur(10px)}
+.bk{color:#475569;text-transform:uppercase;font-size:.58rem;letter-spacing:.04em;margin-right:4px}
+.bv{font-family:monospace;font-weight:700;color:#cbd5e1}
+
+/* ─── OVERLAY ─── */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.92);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:16px;z-index:100;backdrop-filter:blur(6px)}
+.ovico{font-size:3.8rem;filter:drop-shadow(0 0 24px rgba(59,130,246,.6))}
+.ovtit{font-size:1.45rem;font-weight:900;color:#fff;text-align:center;letter-spacing:.02em}
+.ovsub{font-size:.88rem;color:#64748b;max-width:440px;text-align:center;line-height:1.6}
+.ovsub strong{color:#60a5fa}
+.ovsel{background:rgba(255,255,255,.06);border:1px solid rgba(59,130,246,.5);color:#e2e8f0;
+  padding:10px 16px;border-radius:10px;font-size:.9rem;min-width:300px;outline:none}
+.ovbtn{padding:12px 38px;border-radius:10px;background:linear-gradient(135deg,#2563eb,#7c3aed);
+  color:#fff;font-size:1rem;font-weight:800;cursor:pointer;border:none;
+  box-shadow:0 0 32px rgba(59,130,246,.5);transition:all .18s}
+.ovbtn:hover{transform:scale(1.04);box-shadow:0 0 45px rgba(59,130,246,.75)}
+.ovnote{font-size:.76rem;color:#475569}
+.ovnote a{color:#60a5fa;text-decoration:none}
+</style>
+<!-- Three.js + OrbitControls (Local offline first, CDN fallback) -->
+<script src="/lib/three/three.min.js"></script>
+<script src="/lib/three/OrbitControls.js"></script>
+<script>
+  if (typeof THREE === 'undefined') {
+    document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>');
+    document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"><\/script>');
+  }
+</script>
+</head>
+<body>
+<div id="canvas-container">
+  <canvas id="c"></canvas>
+</div>
+
+<!-- TOP NAV -->
+<div class="nav">
+  <div class="logo">
+    <div class="logo-badge">YOLO 11</div>
+    YOLO<span>Vision</span> 3D Studio
+  </div>
+  <div class="vsep"></div>
+
+  <!-- 9 STAGES VS FULL 23 LAYERS TOGGLE -->
+  <div class="mode-pill-group">
+    <button class="mode-pill active" id="btnMode9" onclick="switchViewArchitecture('9core')">🌟 9 Core Stages</button>
+    <button class="mode-pill" id="btnMode23" onclick="switchViewArchitecture('full23')">🔬 Full (23 Layers)</button>
+  </div>
+
+  <div class="vsep"></div>
+  <select class="jsel" id="jsel" onchange="switchJob()"><option>Loading training jobs…</option></select>
+  <span class="wsbadge b-idle" id="wsBadge">IDLE (DEMO)</span>
+
+  <!-- DUAL EXPLAINER MODE IN TOP NAV -->
+  <div class="mode-pill-group" style="margin-left:6px">
+    <button class="mode-pill active" id="navBtnBeg" onclick="setGlobalExplainerMode('beginner')">🎓 Beginner</button>
+    <button class="mode-pill" id="navBtnExp" onclick="setGlobalExplainerMode('expert')">🔬 AI Expert</button>
+  </div>
+
+  <div style="margin-left:auto;display:flex;gap:7px">
+    <button class="nbtn on" id="simBtn" onclick="toggleSimulation()">▶ Simulation</button>
+    <button class="nbtn on" id="btnTray" onclick="toggleImageTray()">🖼️ Image Flow</button>
+    <button class="nbtn on" id="rotBtn" onclick="toggleRot()">⟳ Rotate</button>
+    <button class="nbtn" onclick="resetCam()">⊞ Reset View</button>
+    <button class="nbtn" onclick="toggleConnections()" id="btnLinks">🕸 Hide Links</button>
+    <a class="nbtn" href="/Training/History">← History</a>
+    <a class="nbtn" href="/Training/Wizard">+ Train</a>
+  </div>
+</div>
+
+<!-- 9 CORE ARCHITECTURAL STAGES RIBBON -->
+<div class="arch-ribbon" id="archRibbon">
+  <span class="arch-tag">YOLO Stages:</span>
+  <button class="arch-pill active" onclick="focusStageType('all')">🌐 All Network</button>
+  <button class="arch-pill" onclick="focusStageType('input')">📷 1. Input Image</button>
+  <button class="arch-pill" onclick="focusStageType('conv')">⚡ 2. Convolution (Conv)</button>
+  <button class="arch-pill" onclick="focusStageType('bn')">⚖️ 3. Batch Normalization (BN)</button>
+  <button class="arch-pill" onclick="focusStageType('silu')">📈 4. Activation (SiLU)</button>
+  <button class="arch-pill" onclick="focusStageType('c2f')">🧩 5. C2f / C3k2 Bottleneck</button>
+  <button class="arch-pill" onclick="focusStageType('sppf')">🌐 6. SPPF Multi-Scale</button>
+  <button class="arch-pill" onclick="focusStageType('upsample')">⬆️ 7. Upsample (2×)</button>
+  <button class="arch-pill" onclick="focusStageType('concat')">🔀 8. Concat Fusion</button>
+  <button class="arch-pill" onclick="focusStageType('detect')">🎯 9. Detect Head</button>
+</div>
+
+<!-- PHASE STRIP -->
+<div class="phstrip" id="phstrip">
+  <div class="ph" id="ph0">📷 1. Input Batch</div>
+  <div class="ph" id="ph1">⚡ 2. Forward Feature Flow</div>
+  <div class="ph" id="ph2">📊 3. Loss (DFL + CIoU + BCE)</div>
+  <div class="ph" id="ph3">🔴 4. Backpropagation Gradients</div>
+  <div class="ph" id="ph4">🟢 5. Optimizer Weights Updated</div>
+</div>
+
+<!-- LEFT METRICS HUD -->
+<div class="hud-left">
+  <div class="hud-hd">
+    <span>Live Training</span>
+    <span class="ldot"></span>
+  </div>
+  <div class="mr"><span class="mk">Epoch</span><span class="mv" id="mEp">–</span></div>
+  <div class="mr"><span class="mk">Batch</span><span class="mv" id="mBat">–</span></div>
+  <div class="mr"><span class="mk">Box Loss</span><span class="mv w" id="mBox">–</span></div>
+  <div class="mr"><span class="mk">Cls Loss</span><span class="mv w" id="mCls">–</span></div>
+  <div class="mr"><span class="mk">mAP@50</span><span class="mv g" id="mMap">–</span></div>
+  <div class="mr"><span class="mk">LR</span><span class="mv" id="mLR">–</span></div>
+  <div class="pb"><div class="pf" id="pf" style="width:0%"></div></div>
+  <div class="ptxt" id="ptxt">Training progress</div>
+  <div class="sep"></div>
+  <div class="hud-title">Gradient Norm per Layer</div>
+  <div class="gbars" id="gbars"></div>
+  <div class="gbarlbl"><span>Input Stem</span><span>Detect Head</span></div>
+</div>
+
+<!-- RIGHT ARCHITECTURE INSPECTOR -->
+<div class="hud-right">
+  <div class="rh-hd">Neural Flow Legend</div>
+  <div class="legend-box">
+    <div class="leg-row"><div class="leg-line leg-blue"></div><span>Forward Feature Flow</span></div>
+    <div class="leg-row"><div class="leg-line leg-red"></div><span>Backprop Error Gradients</span></div>
+    <div class="leg-row"><div class="leg-line leg-white"></div><span>Residual / Skip Connections</span></div>
+  </div>
+
+  <div class="rh-hd" style="margin-top:10px">Selected Layer</div>
+  <div class="insp-box" id="inspBox">
+    <div class="insp-name" id="inspName">Hover or click any image plane or tile</div>
+    <div class="insp-row"><span class="insp-k">Type</span><span class="insp-v" id="inspType">–</span></div>
+    <div class="insp-row"><span class="insp-k">Shape</span><span class="insp-v" id="inspShape">–</span></div>
+    <div class="insp-row"><span class="insp-k">Channels</span><span class="insp-v" id="inspCh">–</span></div>
+    <div class="insp-row"><span class="insp-k">Resolution</span><span class="insp-v" id="inspRes">–</span></div>
+    <div class="insp-row"><span class="insp-k">Parameters</span><span class="insp-v" id="inspParams">–</span></div>
+    <div class="insp-row"><span class="insp-k">Grad Norm</span><span class="insp-v" id="inspGrad">–</span></div>
+    <div style="font-size:.62rem;color:#64748b;margin-top:6px;line-height:1.4" id="inspDesc">Click below to inspect the real-time image status transformation at this stage.</div>
+    <button class="insp-btn" onclick="openCurrentStageDeepDive()">🔍 Inspect Image Status &amp; Math</button>
+  </div>
+</div>
+
+<!-- REAL-TIME IMAGE STATUS FLOW DOCK (9 CORE LAYERS) -->
+<div class="image-tray" id="imageTray">
+  <div class="tray-header" onclick="toggleImageTray()">
+    <div class="tray-title">
+      <span>🖼️</span> Real-Time Image Status Across 9 Layers
+      <span style="font-size:.6rem;color:#94a3b8;font-weight:400;text-transform:none">(Image transformation at each network layer)</span>
+    </div>
+    <button class="tray-toggle-btn" id="trayToggleBtn">▼ Minimize</button>
+  </div>
+  <div class="tray-grid" id="trayGrid">
+    <!-- 9 Layer Cards populated dynamically -->
+  </div>
+</div>
+
+<!-- DEEP-DIVE STAGE MODAL (Image Status + Dual Explanations) -->
+<div class="stage-modal" id="stageModal">
+  <div class="sm-content">
+    <div class="sm-header">
+      <div>
+        <div class="sm-title" id="smTitle">
+          <span id="smIcon">⚡</span>
+          <span id="smName">Convolution (Conv)</span>
+          <span class="sm-badge" id="smBadge" style="background:#2563eb;color:#fff">Feature Extraction</span>
+        </div>
+        <div style="font-size:.74rem;color:#94a3b8;margin-top:3px" id="smSummary">Extracts visual features by convolving trainable filters over the image.</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="mode-toggle">
+          <button class="mode-btn active" id="btnBeg" onclick="setExplainerMode('beginner')">🎓 Beginner Mode</button>
+          <button class="mode-btn" id="btnExp" onclick="setExplainerMode('expert')">🔬 AI Expert Mode</button>
+        </div>
+        <button class="sm-close" onclick="closeStageModal()">✕</button>
+      </div>
+    </div>
+
+    <!-- Live Image Status in this Stage -->
+    <div class="image-status-section">
+      <div class="is-title"><span>🖼</span> Image Status in this Layer</div>
+      <div class="is-grid">
+        <div class="is-card">
+          <div class="is-card-title">1. Incoming Image Tensor</div>
+          <div class="is-img-wrap"><canvas id="isCanvasIn" width="128" height="128"></canvas></div>
+          <div class="is-card-desc" id="isDescIn">Input tensor entering this layer stage.</div>
+        </div>
+        <div class="is-card">
+          <div class="is-card-title" id="isTransformTitle">2. Layer Operation / Kernel</div>
+          <div class="is-img-wrap"><canvas id="isCanvasOp" width="128" height="128"></canvas></div>
+          <div class="is-card-desc" id="isDescOp">Transformation applied to the image data.</div>
+        </div>
+        <div class="is-card">
+          <div class="is-card-title">3. Output Feature Heatmap</div>
+          <div class="is-img-wrap"><canvas id="isCanvasOut" width="128" height="128"></canvas></div>
+          <div class="is-card-desc" id="isDescOut">Resulting feature map passed to the next stage.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Explainer Content Box (Switches between Beginner & AI Expert) -->
+    <div class="sm-explain-box" id="smExplainBox">
+      <div class="sm-exp-hd" id="smExpHd">How it Works (Simple Analogy)</div>
+      <div class="sm-exp-body" id="smExpBody">Explanation content</div>
+      <div class="sm-math-box" id="smMathBox" style="display:none">Math formula</div>
+    </div>
+  </div>
+</div>
+
+<!-- HOVER TOOLTIP -->
+<div class="tip" id="tip">
+  <div class="tipname" id="tipName">Layer</div>
+  <div class="tipr"><span class="tipk">Type</span><span class="tipv" id="tipType">–</span></div>
+  <div class="tipr"><span class="tipk">Channels</span><span class="tipv" id="tipCh">–</span></div>
+  <div class="tipr"><span class="tipk">Spatial Dims</span><span class="tipv" id="tipSp">–</span></div>
+  <div class="tipr"><span class="tipk">Grad Norm</span><span class="tipv" id="tipGn">–</span></div>
+  <div class="tipr"><span class="tipk">Weights/Bias</span><span class="tipv" id="tipP">–</span></div>
+</div>
+
+<!-- BOTTOM STATUS BAR -->
+<div class="bot">
+  <span><span class="bk">Architecture</span><span class="bv" id="bArchMode">9 Core Stages</span></span>
+  <span><span class="bk">Total Stages</span><span class="bv" id="bLay">9</span></span>
+  <span><span class="bk">Active Filter</span><span class="bv" id="bActiveFilter">All Network</span></span>
+  <span><span class="bk">FPS</span><span class="bv" id="bFPS">60</span></span>
+  <span><span class="bk">State</span><span class="bv" id="bPhase">Standing by</span></span>
+  <span style="margin-left:auto;color:#475569;font-size:.65rem">
+    🖱 Left-Click + Drag: Orbit &middot; Right-Click: Pan &middot; Scroll: Zoom &middot; Click Layer Image or Tile: Deep Dive
+  </span>
+</div>
+
+<!-- OVERLAY FOR JOB SELECTION -->
+<div class="ov" id="ov">
+  <div onclick="document.getElementById('ov').style.display='none'" style="position:absolute;top:20px;right:25px;font-size:1.8rem;color:#64748b;cursor:pointer;padding:8px;" title="Dismiss overlay">✕</div>
+  <div class="ovico">🧠</div>
+  <div class="ovtit">YOLO Real-Time 3D Neural Studio</div>
+  <div class="ovsub">
+    Watch <strong>feature activation heatmaps</strong>, <strong>tensor transformations</strong>, and <strong>gradient backpropagation</strong> stream through the 3D network in real-time.
+  </div>
+  <select class="ovsel" id="ovSel"><option value="">Loading training runs…</option></select>
+  <div style="display:flex;gap:12px;margin-top:6px;">
+    <button class="ovbtn" onclick="startFromOverlay()">▶ Connect &amp; Watch Live</button>
+    <button type="button" onclick="document.getElementById('ov').style.display='none'" style="padding:12px 24px;border-radius:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#cbd5e1;font-weight:700;font-size:.9rem;cursor:pointer;">👁 Explore 3D Architecture</button>
+  </div>
+  <div class="ovnote">No job running? Click <strong>Explore 3D Architecture</strong> above, or <a href="/Training/Wizard">launch a training run in the Wizard →</a></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   YOLO REAL-TIME 3D NEURAL NETWORK & IMAGE STATUS VISUALIZER
+   ───────────────────────────────────────────────────────────────────────
+   Accurately implements the user's 9 core architectural stages:
+   1. Input Layer: Receives the input image.
+   2. Convolution (Conv): Extracts visual features.
+   3. Batch Normalization (BN): Normalizes activations to stabilize training.
+   4. Activation (SiLU): Adds non-linearity.
+   5. C2f / C3 / C3k2: Extracts and combines features efficiently.
+   6. SPPF: Captures multi-scale spatial information.
+   7. Upsample: Increases feature-map resolution.
+   8. Concat: Combines feature maps from different layers.
+   9. Detect: Predicts bounding boxes, classes, and confidence scores.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const PY_WS = 'ws://localhost:8000';
+
+// Visual Layout Constants
+const CFG = {
+  LAYER_SPACING_9: 200,   // Spacing between stages in 9-stage view
+  LAYER_SPACING_23: 135,  // Spacing in 23-layer view
+  TILE_SIZE: 22,          // Base size of each square feature map tile
+  TILE_GAP: 4,            // Gap between tiles in grid
+  STAGE_IMAGE_SIZE: 82,   // Size of the prominent in-network Image Stage plane
+  BEZIER_LINES_PER_PAIR: 64, // Density of curved connections between layer pairs
+};
+
+// Comprehensive 9-Stage Knowledge Base (Beginner & AI Expert)
+const STAGE_KNOWLEDGE = {
+  'input': {
+    num: 1,
+    name: 'Input Layer',
+    icon: '📷',
+    role: 'Receives the input image',
+    color: '#38bdf8',
+    summary: 'Receives the input raw RGB image batch resized to 640×640 pixels.',
+    beginner: 'Think of this as the eye of the AI. Before the model can detect anything, it takes in the raw digital photograph. The image is split into three primary color channels (Red, Green, Blue) and fed into the network. Colorful bounding boxes represent the objects the AI is being taught to detect (like cars, trucks, and traffic lights).',
+    expert: 'Input tensor $\\mathbf{X} \\in \\mathbb{R}^{B \\times 3 \\times H \\times W}$ normalized to $[0, 1]$ or standardized with ImageNet mean/variance. Data augmentations including Mosaic (4-image blending), MixUp, and affine jittering are applied in-memory during batch creation to maximize feature diversity and prevent overfitting.',
+    math: 'Input: X ∈ R^(B × 3 × 640 × 640), Pixel Values ∈ [0.0, 1.0]\nGround Truth: BBoxes ∈ R^(N × 4), Classes ∈ {0..C-1}',
+    descIn: 'Raw 3-channel RGB digital photograph from the dataset.',
+    descOp: 'Color normalization, mosaic augmentation, and batching.',
+    descOut: 'Batch tensor [B, 3, 640, 640] ready for spatial filtering.'
+  },
+  'conv': {
+    num: 2,
+    name: 'Convolution (Conv)',
+    icon: '⚡',
+    role: 'Extracts visual features',
+    color: '#3b82f6',
+    summary: 'Extracts visual features by convolving trainable filter kernels over the image.',
+    beginner: 'Imagine looking through 32 different magnifying glasses. One glass looks for horizontal lines, another looks for curves, and another looks for red textures. By sliding these "filters" across the whole image, the AI creates mathematical fingerprints of where all the important lines and shapes are located.',
+    expert: '2D Discrete Cross-Correlation: $\\mathbf{Y}_{c, i, j} = \\sum_{k} \\sum_{u, v} \\mathbf{W}_{c, k, u, v} \\cdot \\mathbf{X}_{k, i \\cdot s + u, j \\cdot s + v} + b_c$. In YOLO11, $3\\times 3$ stride-2 convolutions downsample spatial dimensions while doubling channel depth, systematically expanding the receptive field while extracting invariant edge/texture primitives.',
+    math: 'Y[c, i, j] = Σ_k Σ_(u,v) W[c, k, u, v] · X[k, i·s + u, j·s + v] + b_c\nKernel: 3×3, Stride: 1 or 2, FLOPs: 2 × C_in × C_out × K² × H_out × W_out',
+    descIn: 'Raw pixels or preceding feature map tensor.',
+    descOp: '3×3 learnable weight kernels sliding across spatial coordinates.',
+    descOut: 'High-contrast edge, corner, and gradient activation maps.'
+  },
+  'bn': {
+    num: 3,
+    name: 'Batch Normalization (BN)',
+    icon: '⚖️',
+    role: 'Normalizes activations to stabilize training',
+    color: '#10b981',
+    summary: 'Normalizes activations to stabilize training and accelerate gradient convergence.',
+    beginner: 'Like automatic volume control on a microphone. If one part of the image is blindingly bright and another is super dark, the network could get confused and crash. Batch Normalization adjusts the "volume" of every feature so they stay balanced, allowing the network to learn 10x faster and much more stably.',
+    expert: 'Minimizes Internal Covariate Shift: calculates mini-batch mean $\\mu_B$ and variance $\\sigma_B^2$: $\\hat{x}_i = \\frac{x_i - \\mu_B}{\\sqrt{\\sigma_B^2 + \\epsilon}}$, followed by learnable scale and shift: $y_i = \\gamma \\hat{x}_i + \\beta$. Smooths the loss landscape, allowing higher initial learning rates and reducing sensitivity to weight initialization.',
+    math: 'μ_B = (1/m) Σ x_i,  σ_B² = (1/m) Σ (x_i - μ_B)²\nx̂_i = (x_i - μ_B) / √(σ_B² + ε),  y_i = γ · x̂_i + β\nRunning stats: E[x] ← (1-m)E[x] + m·μ_B',
+    descIn: 'Unnormalized raw convolved values with varying dynamic ranges.',
+    descOp: 'Zero-centering (mean subtraction) and unit-variance scaling.',
+    descOut: 'Contrast-balanced normalized activations with mean 0 and std 1.'
+  },
+  'silu': {
+    num: 4,
+    name: 'Activation (SiLU / Swish)',
+    icon: '📈',
+    role: 'Adds non-linearity',
+    color: '#8b5cf6',
+    summary: 'Adds non-linearity so the network can learn complex curves and non-linear patterns.',
+    beginner: 'A smart gatekeeper. Without an activation function, the AI could only learn straight lines. SiLU turns off unhelpful negative noise smoothly while allowing strong, meaningful signals to pass through. This lets the network understand complex curves, wheels, windows, and faces.',
+    expert: 'Sigmoid Linear Unit (SiLU / Swish): $f(x) = x \\cdot \\sigma(x) = \\frac{x}{1 + e^{-x}}$. Unlike ReLU (which has a discontinuous derivative at $x=0$ causing "dying ReLU"), SiLU is continuously differentiable, non-monotonic, and self-gated. Its smooth gradient flow enhances backpropagation performance in deep vision backbones.',
+    math: 'f(x) = x · σ(x) = x / (1 + e^(-x))\nf\'(x) = σ(x) + x · σ(x)(1 - σ(x)) = f(x) + σ(x)(1 - f(x))',
+    descIn: 'Normalized activations containing positive and negative values.',
+    descOp: 'Smooth continuous non-linear sigmoid gating (x · σ(x)).',
+    descOut: 'Sparsified activations highlighting distinctive object patterns.'
+  },
+  'c2f': {
+    num: 5,
+    name: 'C2f / C3 / C3k2 Bottlenecks',
+    icon: '🧩',
+    role: 'Extracts and combines features efficiently',
+    color: '#ec4899',
+    summary: 'Extracts and combines features efficiently using multi-branch cross-stage partial connections.',
+    beginner: 'Teamwork in action! Instead of having one person do all the work, C2f splits the image data into separate streams. One stream looks at small details like headlights, while another stream looks at whole car bodies. Then it stitches their findings back together, saving computing power while getting smarter results.',
+    expert: 'Cross-Stage Partial (CSP) Network architecture. The input channels are split: one branch passes directly through a $1\\times 1$ conv, while the other branch traverses multiple bottleneck blocks with residual identity shortcuts ($x + \\text{Conv}_{3\\times 3}(\\text{Conv}_{1\\times 1}(x))$). The outputs of all bottlenecks are concatenated and fused via a transition convolution, maximizing gradient path diversity.',
+    math: 'Split: [X_1, X_2] = Split(Conv_1x1(X))\nBottleneck_i: B_i = B_(i-1) + Conv_3x3(Conv_1x1(B_(i-1)))\nOutput: Y = Conv_1x1(Concat(X_1, B_1, B_2, ..., B_n))',
+    descIn: 'High-channel intermediate feature tensor.',
+    descOp: 'Channel split → multi-stage residual bottlenecks → fusion.',
+    descOut: 'Part-level semantic representations (doors, wheels, silhouettes).'
+  },
+  'sppf': {
+    num: 6,
+    name: 'Spatial Pyramid Pooling Fast (SPPF)',
+    icon: '🌐',
+    role: 'Captures multi-scale spatial information',
+    color: '#f59e0b',
+    summary: 'Captures multi-scale spatial information through consecutive max-pooling kernels.',
+    beginner: 'The zoom lens. If an object is very close, it is giant. If it is far away, it is tiny. SPPF looks at the picture at 3 different zoom levels at the exact same time (5×5, 9×9, and 13×13). This helps the AI recognize a truck whether it is 2 feet away or 200 feet away down the road.',
+    expert: 'Receptive field expansion without spatial distortion. Uses three consecutive $5\\times 5$ max pooling layers in series (since two $5\\times 5$ pools equal a $9\\times 9$ receptive field, and three equal a $13\\times 13$). The outputs are concatenated alongside the original feature map: $\\mathbf{Y} = \\text{Concat}(\\mathbf{X}, \\text{Pool}_5(\\mathbf{X}), \\text{Pool}_9(\\mathbf{X}), \\text{Pool}_{13}(\\mathbf{X}))$. Eliminates fixed-size receptive field limitations.',
+    math: 'y_1 = MaxPool_5(X)\ny_2 = MaxPool_5(y_1)  [Receptive field: 9×9]\ny_3 = MaxPool_5(y_2)  [Receptive field: 13×13]\nOutput = Conv_1x1(Concat(X, y_1, y_2, y_3))',
+    descIn: 'Deepest backbone features with compact spatial resolution (20×20).',
+    descOp: 'Sequential 5×5 max-pooling capturing 5×5, 9×9, 13×13 receptive fields.',
+    descOut: 'Multi-scale context-enriched feature map combining local & global cues.'
+  },
+  'upsample': {
+    num: 7,
+    name: 'Upsample (2×)',
+    icon: '⬆️',
+    role: 'Increases feature-map resolution',
+    color: '#a855f7',
+    summary: 'Increases feature-map resolution to combine semantic features with fine spatial grids.',
+    beginner: 'Upscaling like a digital zoom. As the image travelled through earlier layers, it got smaller. Upsample doubles the picture size back up, so the AI can use its smart "deep thoughts" to look closely for small objects like pedestrians or traffic lights that would otherwise get lost.',
+    expert: 'Spatial interpolation: uses Nearest-Neighbor or Bilinear interpolation with scale factor 2 to increase spatial dimensions from $20\\times 20 \\to 40\\times 40$ or $40\\times 40 \\to 80\\times 80$. Introduces zero new parameters while propagating semantic descriptors from the deep backbone into high-resolution lateral neck layers (Feature Pyramid Network top-down path).',
+    math: 'Y[c, 2i, 2j] = Y[c, 2i+1, 2j] = Y[c, 2i, 2j+1] = Y[c, 2i+1, 2j+1] = X[c, i, j]\nInput: [B, C, H, W] → Output: [B, C, 2H, 2W]',
+    descIn: 'Low-resolution, high-level semantic feature map.',
+    descOp: '2× spatial interpolation (bilinear/nearest neighbor).',
+    descOut: 'Higher-resolution spatial grid carrying deep object knowledge.'
+  },
+  'concat': {
+    num: 8,
+    name: 'Concat (Channel Fusion)',
+    icon: '🔀',
+    role: 'Combines feature maps from different layers',
+    color: '#06b6d4',
+    summary: 'Combines feature maps from different layers along the channel dimension.',
+    beginner: 'The great merger! The AI brings together two different versions of the image: the sharp, detailed version from earlier in the network, and the smart, abstract version from deep inside. By stitching them side-by-side, it gets the best of both worlds: pin-point location accuracy and deep object understanding.',
+    expert: 'Depth-wise concatenation along channel axis: $\\mathbf{Y} = [\\mathbf{X}_{\\text{lateral}}, \\mathbf{X}_{\\text{upsampled}}] \\in \\mathbb{R}^{B \\times (C_1 + C_2) \\times H \\times W}$. Bridges the semantic gap in the PANet / BiFPN neck: allows precise bounding box localization from low-level feature strides (P3) combined with strong semantic discriminability from deep strides (P5).',
+    math: 'Y = [X_1; X_2] along dim=1\nShape: [B, C_1, H, W] + [B, C_2, H, W] → [B, C_1 + C_2, H, W]',
+    descIn: 'Two independent feature tensors of matching spatial resolution.',
+    descOp: 'Channel-dimension tensor concatenation along axis 1.',
+    descOut: 'Fused representation possessing both sharp edges and semantic context.'
+  },
+  'detect': {
+    num: 9,
+    name: 'Detect Head',
+    icon: '🎯',
+    role: 'Predicts bounding boxes, classes, and confidence scores',
+    color: '#e11d48',
+    summary: 'Predicts bounding boxes, object classes, and confidence scores directly from multi-scale features.',
+    beginner: 'The final judgment! The AI examines all the evidence collected across the network and makes its final calls. It outputs the bounding boxes (where the objects are) and the confidence scores (how sure it is that an object is a car, truck, or dog). These are the final boxes drawn on your screen!',
+    expert: 'Anchor-Free Decoupled Head. Uses separate convolutional branches for Bounding Box Regression (Distribution Focal Loss with 16 bins per coordinate: $4 \\times 16 = 64$ channels) and Classification (Binary Cross-Entropy over $C$ classes). The raw distribution is integrated via Softmax: $\\hat{y} = \\sum_{i=0}^{15} i \\cdot \\text{softmax}(x_i)$, followed by Non-Maximum Suppression (NMS) to eliminate duplicate overlapping boxes.',
+    math: 'L_total = λ_box · L_CIoU + λ_cls · L_BCE + λ_dfl · L_DFL\nDFL(S_i, S_(i+1)) = -((y_(i+1) - y) log(S_i) + (y - y_i) log(S_(i+1)))\nOutput: Anchors [x, y, w, h] + Class Logits [P_0 ... P_(C-1)]',
+    descIn: 'Fused multi-scale features from neck strides P3 (80×80), P4 (40×40), P5 (20×20).',
+    descOp: 'Decoupled conv regression branches + classification logits + DFL integral.',
+    descOut: 'Final filtered bounding boxes, object labels, and confidence scores.'
+  }
+};
+
+// Canonical 9-Stage Architecture sequence
+const CORE_9_STAGES = [
+  { index: 0, name: 'Input Layer',                 type: 'Input',    tag: 'input',    shape: [1, 3, 640, 640],   params: 0,      grid: [1, 3], desc: 'Receives the input image batch with bounding boxes' },
+  { index: 1, name: 'Convolution (Conv)',          type: 'Conv',     tag: 'conv',     shape: [1, 32, 320, 320], params: 4672,   grid: [3, 3], desc: 'Extracts visual features (edges, contours, gradients)' },
+  { index: 2, name: 'Batch Normalization (BN)',    type: 'BN',       tag: 'bn',       shape: [1, 32, 320, 320], params: 64,     grid: [3, 3], desc: 'Normalizes activations to stabilize training' },
+  { index: 3, name: 'Activation (SiLU)',           type: 'SiLU',     tag: 'silu',     shape: [1, 32, 320, 320], params: 0,      grid: [3, 3], desc: 'Adds non-linearity via smooth gating x · σ(x)' },
+  { index: 4, name: 'C2f / C3k2 Bottlenecks',      type: 'C2f',      tag: 'c2f',      shape: [1, 64, 160, 160], params: 49664,  grid: [3, 3], desc: 'Extracts and combines features efficiently' },
+  { index: 5, name: 'SPPF Multi-Scale Pooling',    type: 'SPPF',     tag: 'sppf',     shape: [1, 256, 20, 20],  params: 164608, grid: [3, 3], desc: 'Captures multi-scale spatial information' },
+  { index: 6, name: 'Upsample (2×)',               type: 'Upsample', tag: 'upsample', shape: [1, 256, 40, 40],  params: 0,      grid: [3, 3], desc: 'Increases feature-map resolution for small objects' },
+  { index: 7, name: 'Concat (Channel Fusion)',     type: 'Concat',   tag: 'concat',   shape: [1, 384, 40, 40],  params: 0,      grid: [3, 3], desc: 'Combines feature maps from different layers' },
+  { index: 8, name: 'Detect Head',                 type: 'Detect',   tag: 'detect',   shape: [1, 256, 20, 20],  params: 751507, grid: [2, 2], desc: 'Predicts bounding boxes, classes, and confidence scores' },
+];
+
+// Full 23-Layer YOLO11 Architecture
+const FULL_23_STAGES = [
+  { index:0,  name:'Conv_0',   type:'Conv',     tag:'conv',     shape:[1,16,320,320], params:464,    grid:[4,4], desc:'Stem Convolution: 3x3 filter extracting initial edge & color gradients' },
+  { index:1,  name:'Conv_1',   type:'Conv',     tag:'conv',     shape:[1,32,160,160], params:4672,   grid:[4,4], desc:'Stride-2 Conv: downsamples to 160x160; extracts texture primitives' },
+  { index:2,  name:'C2f_2',    type:'C2f',      tag:'c2f',      shape:[1,32,160,160], params:7360,   grid:[4,4], desc:'C2f Bottleneck: residual identity shortcuts preserving gradients' },
+  { index:3,  name:'Conv_3',   type:'Conv',     tag:'conv',     shape:[1,64,80,80],   params:18560,  grid:[4,4], desc:'Stride-2 Conv: downsamples to 80x80; forms corner & contour detectors' },
+  { index:4,  name:'C2f_4',    type:'C2f',      tag:'c2f',      shape:[1,64,80,80],   params:49664,  grid:[4,4], desc:'C2f Bottleneck: multi-path feature reuse across intermediate channels' },
+  { index:5,  name:'Conv_5',   type:'Conv',     tag:'conv',     shape:[1,128,40,40],  params:73984,  grid:[4,4], desc:'Stride-2 Conv: downsamples to 40x40; constructs part-based detectors' },
+  { index:6,  name:'C2f_6',    type:'C2f',      tag:'c2f',      shape:[1,128,40,40],  params:197632, grid:[4,4], desc:'C2f Bottleneck: deep feature refinement for medium-sized context' },
+  { index:7,  name:'Conv_7',   type:'Conv',     tag:'conv',     shape:[1,256,20,20],  params:295424, grid:[4,4], desc:'Stride-2 Conv: downsamples to 20x20; captures whole-object silhouettes' },
+  { index:8,  name:'C2f_8',    type:'C2f',      tag:'c2f',      shape:[1,256,20,20],  params:788480, grid:[4,4], desc:'Deepest backbone C2f with maximum receptive field' },
+  { index:9,  name:'SPPF_9',   type:'SPPF',     tag:'sppf',     shape:[1,256,20,20],  params:164608, grid:[3,3], desc:'SPPF: pools 5x5, 9x9, 13x13 context without losing resolution' },
+  { index:10, name:'Up_10',    type:'Upsample', tag:'upsample', shape:[1,256,40,40],  params:0,      grid:[3,3], desc:'Bilinear Upsample: restores 40x40 resolution for FPN neck' },
+  { index:11, name:'Cat_11',   type:'Concat',   tag:'concat',   shape:[1,384,40,40],  params:0,      grid:[3,3], desc:'Concat: merges backbone Layer 6 features with upsampled features' },
+  { index:12, name:'C2f_12',   type:'C2f',      tag:'c2f',      shape:[1,128,40,40],  params:263424, grid:[3,3], desc:'Neck C2f: fuses fine spatial detail with high-level semantics' },
+  { index:13, name:'Up_13',    type:'Upsample', tag:'upsample', shape:[1,128,80,80],  params:0,      grid:[3,3], desc:'Bilinear Upsample: restores 80x80 resolution for small-object head' },
+  { index:14, name:'Cat_14',   type:'Concat',   tag:'concat',   shape:[1,192,80,80],  params:0,      grid:[3,3], desc:'Concat: merges backbone Layer 4 with high-resolution neck features' },
+  { index:15, name:'C2f_15',   type:'C2f',      tag:'c2f',      shape:[1,64,80,80],   params:66176,  grid:[3,3], desc:'Small-Object Feature Map (80x80 P3 detection stride)' },
+  { index:16, name:'Conv_16',  type:'Conv',     tag:'conv',     shape:[1,64,40,40],   params:36992,  grid:[3,3], desc:'Bottom-Up Conv: downsamples P3 to 40x40 for PANet path' },
+  { index:17, name:'Cat_17',   type:'Concat',   tag:'concat',   shape:[1,192,40,40],  params:0,      grid:[3,3], desc:'Concat: merges bottom-up P3 features with P4 features' },
+  { index:18, name:'C2f_18',   type:'C2f',      tag:'c2f',      shape:[1,128,40,40],  params:246528, grid:[3,3], desc:'Medium-Object Feature Map (40x40 P4 detection stride)' },
+  { index:19, name:'Conv_19',  type:'Conv',     tag:'conv',     shape:[1,128,20,20],  params:147712, grid:[3,3], desc:'Bottom-Up Conv: downsamples P4 to 20x20 for deep PANet path' },
+  { index:20, name:'Cat_20',   type:'Concat',   tag:'concat',   shape:[1,384,20,20],  params:0,      grid:[3,3], desc:'Concat: merges P4 features with P5 context' },
+  { index:21, name:'C2f_21',   type:'C2f',      tag:'c2f',      shape:[1,256,20,20],  params:985600, grid:[3,3], desc:'Large-Object Feature Map (20x20 P5 detection stride)' },
+  { index:22, name:'Detect_22',type:'Detect',   tag:'detect',   shape:[1,256,20,20],  params:751507, grid:[2,2], desc:'Anchor-Free Decoupled Head: outputs bounding boxes & class logits' },
+];
+
+let currentArchMode = '9core'; // '9core' or 'full23'
+let activeStagesList = CORE_9_STAGES;
+
+let scene, camera, renderer, controls, raycaster, mouse;
+let layerGroups = [];
+let connectionMeshes = [];
+let particleSystem = null;
+let texCache = {};
+let gradNorms = {};
+let autoRotate = true;
+let showLinks = true;
+let simulationRunning = true;
+let totalEpochs = 100;
+let ws = null;
+let _phase = -1;
+let fpsLastTime = performance.now(), fpsFrames = 0;
+let activeStageFilter = 'all';
+let currentSelectedLayer = CORE_9_STAGES[0];
+let currentExplainerMode = 'beginner'; // 'beginner' or 'expert'
+let liveSimulationTimer = null;
+let stageImageCanvases = {}; // tag -> { canvas, ctx, texture, mesh }
+let currentBatchImageBase64 = null;
+
+/* ────────────────────────── THREE.JS BOOTSTRAP ────────────────────────── */
+function initThree() {
+  const container = document.getElementById('canvas-container');
+  const canvas = document.getElementById('c');
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x000000);
+  scene.fog = new THREE.FogExp2(0x000000, 0.0003);
+
+  camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 9000);
+  camera.position.set(-680, 160, 1150);
+
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  if (typeof THREE.OrbitControls !== 'undefined') {
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.rotateSpeed = 0.6;
+    controls.target.set(-250, 0, 0);
+  }
+
+  // Lighting
+  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+  const l1 = new THREE.PointLight(0x3b82f6, 2.5, 2500);
+  l1.position.set(-500, 500, 500);
+  scene.add(l1);
+  const l2 = new THREE.PointLight(0xf43f5e, 2, 2500);
+  l2.position.set(1000, -300, 400);
+  scene.add(l2);
+
+  // Ground grid
+  const grid = new THREE.GridHelper(5500, 90, 0x1e293b, 0x090d16);
+  grid.position.y = -190;
+  grid.material.transparent = true;
+  grid.material.opacity = 0.35;
+  scene.add(grid);
+
+  raycaster = new THREE.Raycaster();
+  mouse = new THREE.Vector2();
+
+  // Events
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('click', onSceneClick);
+  window.addEventListener('resize', onWindowResize);
+
+  // Build default 9 Core Stages Network
+  buildCurrentArchitecture();
+
+  // Populate Bottom Real-Time Image Tray
+  buildImageStatusTray();
+
+  // Start live simulation for immediate visual responsiveness
+  startLiveSimulation();
+
+  // Render loop
+  renderLoop();
+}
+
+/* ────────────────────────── ARCHITECTURE SWITCHER ────────────────────────── */
+function switchViewArchitecture(mode) {
+  currentArchMode = mode;
+  document.getElementById('btnMode9').classList.toggle('active', mode === '9core');
+  document.getElementById('btnMode23').classList.toggle('active', mode === 'full23');
+
+  activeStagesList = (mode === '9core') ? CORE_9_STAGES : FULL_23_STAGES;
+  document.getElementById('bArchMode').textContent = (mode === '9core') ? '9 Core Stages' : 'Full (23 Layers)';
+  document.getElementById('bLay').textContent = (mode === '9core') ? '9' : '23';
+
+  buildCurrentArchitecture();
+  resetCam();
+}
+
+function buildCurrentArchitecture(thumbsMap = {}) {
+  buildNetworkScene(activeStagesList, thumbsMap);
+}
+
+/* ────────────────────────── BUILD NEURAL NETWORK ────────────────────────── */
+function buildNetworkScene(stages, thumbsMap) {
+  layerGroups.forEach(lg => scene.remove(lg.group));
+  connectionMeshes.forEach(cm => scene.remove(cm));
+  layerGroups = [];
+  connectionMeshes = [];
+
+  const spacing = (currentArchMode === '9core') ? CFG.LAYER_SPACING_9 : CFG.LAYER_SPACING_23;
+  const N = stages.length;
+  const totalW = (N - 1) * spacing;
+  const startX = -totalW * 0.5;
+
+  stages.forEach((stage, i) => {
+    const x = startX + i * spacing;
+    const lg = createLayerGroup(stage, x, thumbsMap[i] || []);
+    scene.add(lg.group);
+    layerGroups.push(lg);
+  });
+
+  // Build curved connection bundles between layer pairs
+  for (let i = 0; i < layerGroups.length - 1; i++) {
+    const conn = createLayerConnections(layerGroups[i], layerGroups[i + 1]);
+    scene.add(conn);
+    connectionMeshes.push(conn);
+  }
+}
+
+/* ─── CREATE ONE LAYER GROUP WITH IN-NETWORK IMAGE STAGE PLANE ─── */
+function createLayerGroup(stage, x, thumbs) {
+  const group = new THREE.Group();
+  group.position.set(x, 0, 0);
+
+  const [rows, cols] = stage.grid || [3, 3];
+  const tileMeshes = [];
+  const edgeMeshes = [];
+
+  const spatRatio = Math.max(0.4, Math.min(1.0, (stage.shape[2] || 64) / 320));
+  const tileSize = CFG.TILE_SIZE * spatRatio;
+  const tileGap = CFG.TILE_GAP * spatRatio;
+
+  const totalGridH = rows * tileSize + (rows - 1) * tileGap;
+  const totalGridW = cols * tileSize + (cols - 1) * tileGap;
+
+  // 1. THE IN-NETWORK IMAGE STAGE PLANE (Prominent visual display of image status)
+  const imgSize = (stage.tag === 'input') ? 110 : CFG.STAGE_IMAGE_SIZE;
+  const cv = document.createElement('canvas');
+  cv.width = 256; cv.height = 256;
+  renderSingleImageStatusCanvasDirect(cv, stage.tag);
+
+  const imgTex = new THREE.CanvasTexture(cv);
+  const imgGeo = new THREE.PlaneGeometry(imgSize, imgSize);
+  const imgMat = new THREE.MeshBasicMaterial({ map: imgTex, side: THREE.DoubleSide });
+  const imagePlane = new THREE.Mesh(imgGeo, imgMat);
+  imagePlane.rotation.y = 0;
+
+  // Place image plane on left of channel tiles or centered if input
+  const imgPosX = (stage.tag === 'input') ? 0 : (-totalGridW * 0.5 - imgSize * 0.5 - 12);
+  imagePlane.position.set(imgPosX, 0, 5);
+
+  imagePlane.userData = {
+    isImageStage: true,
+    layerIdx: stage.index,
+    layerName: stage.name,
+    type: stage.type,
+    tag: stage.tag,
+    shape: stage.shape,
+    params: stage.params,
+    desc: stage.desc,
+    stageObj: stage,
+    worldPos: new THREE.Vector3(x + imgPosX, 0, 5)
+  };
+
+  group.add(imagePlane);
+
+  // Glowing Frame Border for Image Stage Plane
+  const imgEdgeGeo = new THREE.EdgesGeometry(imgGeo);
+  const imgEdgeMat = new THREE.LineBasicMaterial({
+    color: getTypeColor(stage.type),
+    linewidth: 2,
+    transparent: true,
+    opacity: 0.85
+  });
+  const imgEdge = new THREE.LineSegments(imgEdgeGeo, imgEdgeMat);
+  imgEdge.position.copy(imagePlane.position);
+  group.add(imgEdge);
+  edgeMeshes.push(imgEdge);
+
+  // Save reference for live real-time WebSocket updates
+  stageImageCanvases[stage.tag] = {
+    canvas: cv,
+    ctx: cv.getContext('2d'),
+    texture: imgTex,
+    mesh: imagePlane
+  };
+
+  // Image Plane Tag Label Sprite
+  const stageInfo = STAGE_KNOWLEDGE[stage.tag] || { icon: '⚡', num: stage.index + 1 };
+  const imgBadgeSprite = createTextSprite(`${stageInfo.icon} ${stage.name}`, `${stage.shape[2]}×${stage.shape[3]} · Image Status`);
+  imgBadgeSprite.position.set(imgPosX, imgSize * 0.5 + 14, 5);
+  imgBadgeSprite.scale.set(imgSize * 1.3, 13, 1);
+  group.add(imgBadgeSprite);
+
+  // 2. FEATURE CHANNEL TILES GRID (Adjacent to image plane)
+  if (stage.tag !== 'input' || currentArchMode === 'full23') {
+    const gridOffsetX = (stage.tag === 'input') ? 0 : (imgSize * 0.5 + 12);
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const idx = r * cols + c;
+        const px = gridOffsetX + c * (tileSize + tileGap) - (cols - 1) * 0.5 * (tileSize + tileGap);
+        const py = (rows - 1) * 0.5 * (tileSize + tileGap) - r * (tileSize + tileGap);
+        const pz = c * 3;
+
+        const b64 = thumbs[idx];
+        let mat;
+
+        if (b64) {
+          const key = b64.slice(0, 64);
+          if (!texCache[key]) {
+            const tex = new THREE.Texture();
+            const img = new Image();
+            img.onload = () => { tex.image = img; tex.needsUpdate = true; };
+            img.src = 'data:image/jpeg;base64,' + b64;
+            texCache[key] = tex;
+          }
+          mat = new THREE.MeshBasicMaterial({
+            map: texCache[b64.slice(0, 64)],
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.95
+          });
+        } else {
+          const defTex = createSyntheticActivationTexture(stage.tag || 'conv', stage.index, idx);
+          mat = new THREE.MeshBasicMaterial({
+            map: defTex,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.88
+          });
+        }
+
+        const geo = new THREE.PlaneGeometry(tileSize, tileSize);
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.rotation.y = 0;
+        mesh.position.set(px, py, pz);
+
+        mesh.userData = {
+          layerIdx: stage.index,
+          layerName: stage.name,
+          tileIdx: idx,
+          shape: stage.shape,
+          params: stage.params,
+          type: stage.type,
+          tag: stage.tag,
+          desc: stage.desc,
+          stageObj: stage,
+          worldPos: new THREE.Vector3(x + px, py, pz)
+        };
+
+        group.add(mesh);
+        tileMeshes.push(mesh);
+
+        // Frame border
+        const edgesGeo = new THREE.EdgesGeometry(geo);
+        const edgeMat = new THREE.LineBasicMaterial({
+          color: getTypeColor(stage.type),
+          transparent: true,
+          opacity: 0.4
+        });
+        const edgeLine = new THREE.LineSegments(edgesGeo, edgeMat);
+        edgeLine.rotation.y = 0;
+        edgeLine.position.set(px, py, pz);
+        group.add(edgeLine);
+        edgeMeshes.push(edgeLine);
+      }
+    }
+
+    const chBadgeSprite = createTextSprite(`Channels (0..${stage.shape[1]-1})`, `Filters Grid`);
+    chBadgeSprite.position.set(gridOffsetX, totalGridH * 0.5 + 14, 0);
+    chBadgeSprite.scale.set(tileSize * cols * 1.3, 11, 1);
+    group.add(chBadgeSprite);
+  }
+
+  return {
+    group,
+    imagePlane,
+    tiles: tileMeshes,
+    edges: edgeMeshes,
+    meta: stage,
+    x,
+    tileSize,
+    rows,
+    cols,
+    totalGridH,
+    totalGridW
+  };
+}
+
+/* ─── CREATE CURVED CONNECTION BUNDLES (Image 3 style) ─── */
+function createLayerConnections(layerA, layerB) {
+  const group = new THREE.Group();
+  group.userData.lines = [];
+
+  // 1. Direct Primary Ribbon between the two Image Stage Planes
+  if (layerA.imagePlane && layerB.imagePlane) {
+    const pA = new THREE.Vector3().copy(layerA.imagePlane.position).add(layerA.group.position);
+    const pB = new THREE.Vector3().copy(layerB.imagePlane.position).add(layerB.group.position);
+    const midX = (pA.x + pB.x) * 0.5;
+    const cp = new THREE.Vector3(midX, (pA.y + pB.y) * 0.5 + 24, (pA.z + pB.z) * 0.5 + 28);
+
+    const curve = new THREE.QuadraticBezierCurve3(pA, cp, pB);
+    const geo = new THREE.BufferGeometry().setFromPoints(curve.getPoints(24));
+    const mat = new THREE.LineBasicMaterial({
+      color: 0x38bdf8,
+      linewidth: 3,
+      transparent: true,
+      opacity: 0.75,
+      depthWrite: false
+    });
+    const mainLine = new THREE.Line(geo, mat);
+    mainLine.userData = { baseOpacity: 0.75, color: 0x38bdf8, isBlue: true, phase: 0 };
+    group.add(mainLine);
+    group.userData.lines.push(mainLine);
+  }
+
+  // 2. Multi-filament ribbons between channel tiles
+  const tilesA = layerA.tiles.length ? layerA.tiles : [layerA.imagePlane];
+  const tilesB = layerB.tiles.length ? layerB.tiles : [layerB.imagePlane];
+  const count = Math.min(CFG.BEZIER_LINES_PER_PAIR, tilesA.length * tilesB.length);
+
+  for (let i = 0; i < count; i++) {
+    const tA = tilesA[i % tilesA.length];
+    const tB = tilesB[(i * 3) % tilesB.length];
+    if (!tA || !tB) continue;
+
+    const pA = new THREE.Vector3().copy(tA.position).add(layerA.group.position);
+    const pB = new THREE.Vector3().copy(tB.position).add(layerB.group.position);
+
+    const midX = (pA.x + pB.x) * 0.5;
+    const flareY = Math.sin(i * 1.3) * (layerA.totalGridH * 0.45 || 25);
+    const flareZ = Math.abs(Math.cos(i * 1.1)) * (layerA.totalGridW * 0.4 || 25) + 12;
+
+    const cp = new THREE.Vector3(midX, (pA.y + pB.y) * 0.5 + flareY, (pA.z + pB.z) * 0.5 + flareZ);
+    const curve = new THREE.QuadraticBezierCurve3(pA, cp, pB);
+    const geo = new THREE.BufferGeometry().setFromPoints(curve.getPoints(16));
+
+    const r = Math.random();
+    let col = 0x3b82f6; // blue
+    if (r > 0.65 && r <= 0.88) col = 0xf43f5e; // red
+    else if (r > 0.88) col = 0xf8fafc; // white
+
+    const baseOpacity = 0.12 + Math.random() * 0.22;
+    const mat = new THREE.LineBasicMaterial({
+      color: col,
+      transparent: true,
+      opacity: baseOpacity,
+      depthWrite: false
+    });
+
+    const line = new THREE.Line(geo, mat);
+    line.userData = {
+      baseOpacity,
+      color: col,
+      isBlue: (col === 0x3b82f6),
+      isRed: (col === 0xf43f5e),
+      phase: Math.random() * Math.PI * 2
+    };
+
+    group.add(line);
+    group.userData.lines.push(line);
+  }
+
+  return group;
+}
+
+/* ─── SYNTHETIC ACTIVATION TEXTURE (For Channel Grid) ─── */
+function createSyntheticActivationTexture(tag, layerIdx, channelIdx) {
+  const cv = document.createElement('canvas');
+  cv.width = 64; cv.height = 64;
+  const ctx = cv.getContext('2d');
+
+  ctx.fillStyle = '#050505';
+  ctx.fillRect(0, 0, 64, 64);
+
+  if (tag === 'bn') {
+    ctx.strokeStyle = '#10b981'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(16, 20, 32, 28);
+    ctx.strokeRect(20, 24, 24, 12);
+  } else if (tag === 'silu') {
+    ctx.strokeStyle = '#8b5cf6'; ctx.lineWidth = 2;
+    ctx.strokeRect(16, 20, 32, 28);
+  } else if (tag === 'sppf') {
+    const grad = ctx.createRadialGradient(32, 34, 4, 32, 34, 24);
+    grad.addColorStop(0, '#f59e0b'); grad.addColorStop(1, '#050505');
+    ctx.fillStyle = grad; ctx.fillRect(8, 8, 48, 48);
+  } else if (tag === 'detect') {
+    ctx.strokeStyle = '#e11d48'; ctx.lineWidth = 2;
+    ctx.strokeRect(18, 22, 28, 24);
+  } else {
+    const freq = Math.max(1, 10 - Math.floor(layerIdx * 0.4));
+    ctx.fillStyle = '#ffffff';
+    for (let y = 4; y < 60; y += freq) {
+      for (let x = 4; x < 60; x += freq) {
+        const v = Math.sin(x * 0.2 + channelIdx) * Math.cos(y * 0.2 + layerIdx);
+        if (v > 0.15) {
+          ctx.fillStyle = `rgba(255, 255, 255, ${(v * 0.85).toFixed(2)})`;
+          ctx.fillRect(x, y, freq * 0.8, freq * 0.8);
+        }
+      }
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(16, 20, 32, 28);
+    ctx.strokeRect(20, 24, 24, 12);
+  }
+
+  return new THREE.CanvasTexture(cv);
+}
+
+/* ─── REAL-TIME IMAGE STATUS UPDATES ACROSS 3D LAYERS ─── */
+function updateInNetworkStageImage(tag, b64Image) {
+  const item = stageImageCanvases[tag];
+  if (!item) return;
+
+  if (b64Image) {
+    const img = new Image();
+    img.onload = () => {
+      item.ctx.drawImage(img, 0, 0, item.canvas.width, item.canvas.height);
+      item.texture.needsUpdate = true;
+
+      // Update tray canvas too
+      const trayCanvas = document.getElementById(`trayCanvas_${tag}`);
+      if (trayCanvas) {
+        const tCtx = trayCanvas.getContext('2d');
+        tCtx.drawImage(img, 0, 0, trayCanvas.width, trayCanvas.height);
+      }
+    };
+    img.src = 'data:image/jpeg;base64,' + b64Image;
+  } else {
+    renderSingleImageStatusCanvasDirect(item.canvas, tag);
+    item.texture.needsUpdate = true;
+  }
+}
+
+/* ─── REAL WEBSOCKET FRAME HANDLER ─── */
+function updateInputImage(b64, w, h, gt, pred) {
+  if (!b64) return;
+  currentBatchImageBase64 = b64;
+
+  const item = stageImageCanvases['input'];
+  if (item) {
+    const img = new Image();
+    img.onload = () => {
+      item.ctx.drawImage(img, 0, 0, item.canvas.width, item.canvas.height);
+      const sx = item.canvas.width / (w || 1);
+      const sy = item.canvas.height / (h || 1);
+
+      (gt || []).forEach(b => {
+        const [x, y, bw, bh] = b.bbox;
+        item.ctx.lineWidth = 3; item.ctx.strokeStyle = '#22c55e';
+        item.ctx.strokeRect(x * sx, y * sy, bw * sx, bh * sy);
+        item.ctx.fillStyle = '#22c55e'; item.ctx.font = 'bold 12px sans-serif';
+        item.ctx.fillText(b.name || '', x * sx + 2, y * sy - 4);
+      });
+
+      (pred || []).forEach(b => {
+        const [x, y, bw, bh] = b.bbox;
+        const col = b.confidence > 0.6 ? '#eab308' : '#ef4444';
+        item.ctx.lineWidth = 2.5; item.ctx.strokeStyle = col;
+        item.ctx.strokeRect(x * sx, y * sy, bw * sx, bh * sy);
+        item.ctx.fillStyle = col; item.ctx.font = 'bold 11px sans-serif';
+        item.ctx.fillText(`${b.name || 'obj'} ${Math.round((b.confidence || 0) * 100)}%`, x * sx + 2, y * sy + bh * sy + 13);
+      });
+
+      item.texture.needsUpdate = true;
+
+      // Update bottom tray input card
+      const trayCanvas = document.getElementById('trayCanvas_input');
+      if (trayCanvas) {
+        const tCtx = trayCanvas.getContext('2d');
+        tCtx.drawImage(item.canvas, 0, 0, trayCanvas.width, trayCanvas.height);
+      }
+    };
+    img.src = 'data:image/jpeg;base64,' + b64;
+  }
+}
+
+/* ─── BUILD REAL-TIME IMAGE STATUS FLOW TRAY (BOTTOM DOCK) ─── */
+function buildImageStatusTray() {
+  const grid = document.getElementById('trayGrid');
+  grid.innerHTML = '';
+
+  const order = ['input', 'conv', 'bn', 'silu', 'c2f', 'sppf', 'upsample', 'concat', 'detect'];
+
+  order.forEach(tag => {
+    const info = STAGE_KNOWLEDGE[tag];
+    const card = document.createElement('div');
+    card.className = 'tray-card' + (tag === 'input' ? ' active' : '');
+    card.id = `trayCard_${tag}`;
+    card.onclick = () => {
+      document.querySelectorAll('.tray-card').forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+      focusStageType(tag);
+    };
+
+    card.innerHTML = `
+      <div class="tc-head">
+        <span class="tc-title">${info.icon} ${info.num}. ${info.name.split(' ')[0]}</span>
+        <span class="tc-badge" style="background:${info.color}33;color:${info.color}">${info.name.split('(')[1]?.replace(')','') || tag}</span>
+      </div>
+      <div class="tc-canvas-wrap">
+        <canvas id="trayCanvas_${tag}" width="128" height="128"></canvas>
+      </div>
+      <div class="tc-role">${info.role}</div>
+      <div class="tc-status" id="trayStatus_${tag}">Real-time active</div>
+    `;
+
+    grid.appendChild(card);
+
+    // Initial render of this stage's image status canvas
+    renderSingleImageStatusCanvas(`trayCanvas_${tag}`, tag);
+  });
+}
+
+function toggleImageTray() {
+  const tray = document.getElementById('imageTray');
+  const btn = document.getElementById('trayToggleBtn');
+  const navBtn = document.getElementById('btnTray');
+  tray.classList.toggle('collapsed');
+  const isCol = tray.classList.contains('collapsed');
+  btn.textContent = isCol ? '▲ Show Image Flow' : '▼ Minimize';
+  navBtn.classList.toggle('on', !isCol);
+}
+
+/* ─── RENDER LIVE IMAGE STATUS CANVAS PREVIEWS ─── */
+function renderSingleImageStatusCanvas(canvasId, tag) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  renderSingleImageStatusCanvasDirect(canvas, tag);
+}
+
+function renderSingleImageStatusCanvasDirect(canvas, tag) {
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#05070f';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (tag === 'input') {
+    drawSampleTruck(ctx, true, canvas.width);
+  } else if (tag === 'conv') {
+    drawEdgeFilteredTruck(ctx, canvas.width);
+  } else if (tag === 'bn') {
+    drawNormalizedFeatures(ctx, canvas.width);
+  } else if (tag === 'silu') {
+    drawRectifiedFeatures(ctx, canvas.width);
+  } else if (tag === 'c2f') {
+    drawPartLevelFeatures(ctx, canvas.width);
+  } else if (tag === 'sppf') {
+    drawMultiScaleContextHeatmap(ctx, canvas.width);
+  } else if (tag === 'upsample') {
+    drawUpsampledGridFeatures(ctx, canvas.width);
+  } else if (tag === 'concat') {
+    drawFusedDualChannelFeatures(ctx, canvas.width);
+  } else if (tag === 'detect') {
+    drawFinalDetections(ctx, canvas.width);
+  }
+}
+
+/* ─── LIVE SIMULATION ENGINE (When training is idle) ─── */
+let _simPulseStep = 0;
+function startLiveSimulation() {
+  if (liveSimulationTimer) clearInterval(liveSimulationTimer);
+  liveSimulationTimer = setInterval(() => {
+    if (!simulationRunning) return;
+    _simPulseStep = (_simPulseStep + 1) % 9;
+    const stages = ['input', 'conv', 'bn', 'silu', 'c2f', 'sppf', 'upsample', 'concat', 'detect'];
+    const curTag = stages[_simPulseStep];
+
+    // Pulse corresponding 3D layer and bottom tray card
+    const card = document.getElementById(`trayCard_${curTag}`);
+    if (card) {
+      card.style.borderColor = STAGE_KNOWLEDGE[curTag].color;
+      setTimeout(() => {
+        if (!card.classList.contains('active')) card.style.borderColor = 'rgba(255,255,255,0.08)';
+      }, 380);
+    }
+
+    const item = stageImageCanvases[curTag];
+    if (item && item.mesh) {
+      item.mesh.scale.set(1.05, 1.05, 1.0);
+      setTimeout(() => {
+        item.mesh.scale.set(1.0, 1.0, 1.0);
+      }, 350);
+    }
+  }, 650);
+}
+
+function toggleSimulation() {
+  simulationRunning = !simulationRunning;
+  const btn = document.getElementById('simBtn');
+  btn.classList.toggle('on', simulationRunning);
+  btn.textContent = simulationRunning ? '▶ Simulation' : '❙❙ Paused';
+}
+
+/* ─── RENDER & ANIMATION LOOP ─── */
+let _pulseClock = 0;
+function renderLoop() {
+  requestAnimationFrame(renderLoop);
+
+  const now = performance.now();
+  const dt = Math.min((now - (renderLoop._last || now)) * 0.001, 0.05);
+  renderLoop._last = now;
+  _pulseClock += dt;
+
+  if (controls) {
+    if (autoRotate && activeStageFilter === 'all') {
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.35;
+    } else {
+      controls.autoRotate = false;
+    }
+    controls.update();
+  }
+
+  // Animate connection lines
+  if (showLinks) {
+    connectionMeshes.forEach((cm, gi) => {
+      (cm.userData.lines || []).forEach(line => {
+        const u = line.userData;
+        const wave = Math.sin(_pulseClock * 3 + u.phase + gi * 0.5);
+        line.material.opacity = u.baseOpacity * (0.8 + wave * 0.45);
+      });
+    });
+  }
+
+  // Pulse edge glow from real gradients
+  layerGroups.forEach(lg => {
+    const gn = gradNorms[lg.meta.index] || 0;
+    const pulse = Math.sin(_pulseClock * 4 + lg.meta.index);
+    const isFiltered = (activeStageFilter === 'all' || lg.meta.tag === activeStageFilter);
+
+    lg.edges.forEach(edge => {
+      if (edge.material) {
+        if (!isFiltered) {
+          edge.material.opacity = 0.05;
+        } else {
+          edge.material.opacity = Math.max(0.18, 0.45 + gn * 0.6 + pulse * 0.15 * (gn || 0.2));
+        }
+      }
+    });
+
+    if (lg.imagePlane && lg.imagePlane.material) {
+      lg.imagePlane.material.opacity = isFiltered ? 1.0 : 0.22;
+    }
+
+    lg.tiles.forEach(tile => {
+      if (tile.material) {
+        tile.material.opacity = isFiltered ? 0.95 : 0.18;
+      }
+    });
+  });
+
+  fpsFrames++;
+  if (now - fpsLastTime > 1000) {
+    document.getElementById('bFPS').textContent = Math.round(fpsFrames * 1000 / (now - fpsLastTime));
+    fpsFrames = 0; fpsLastTime = now;
+  }
+
+  renderer.render(scene, camera);
+}
+
+/* ─── 9 CORE STAGES FOCUS & CAMERA GLIDE ─── */
+function focusStageType(tag) {
+  activeStageFilter = tag;
+
+  // Update ribbon UI
+  document.querySelectorAll('.arch-pill').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  event?.target?.classList?.add('active');
+
+  const pillNames = {
+    'all': 'All Network', 'input': '1. Input Image', 'conv': '2. Convolution (Conv)',
+    'bn': '3. Batch Normalization (BN)', 'silu': '4. Activation (SiLU)',
+    'c2f': '5. C2f / C3k2 Bottleneck', 'sppf': '6. SPPF Multi-Scale',
+    'upsample': '7. Upsample (2×)', 'concat': '8. Concat Fusion', 'detect': '9. Detect Head'
+  };
+  document.getElementById('bActiveFilter').textContent = pillNames[tag] || tag;
+
+  if (tag === 'all') {
+    resetCam();
+    return;
+  }
+
+  // Find matching layer group in 3D
+  const match = layerGroups.find(lg => lg.meta.tag === tag);
+  if (match) {
+    glideCameraTo(match.x, 0, 480);
+    currentSelectedLayer = match.meta;
+    updateInspectorWithLayer(match.meta);
+    openStageDeepDive(tag);
+  }
+}
+
+function glideCameraTo(tgtX, tgtY, distZ) {
+  if (!controls) return;
+  const startCam = camera.position.clone();
+  const endCam = new THREE.Vector3(tgtX, tgtY + 30, distZ);
+  const startTgt = controls.target.clone();
+  const endTgt = new THREE.Vector3(tgtX, tgtY, 0);
+
+  let p = 0;
+  const anim = () => {
+    p += 0.05;
+    camera.position.lerpVectors(startCam, endCam, Math.sin(p * Math.PI * 0.5));
+    controls.target.lerpVectors(startTgt, endTgt, Math.sin(p * Math.PI * 0.5));
+    if (p < 1.0) requestAnimationFrame(anim);
+  };
+  anim();
+}
+
+/* ─── DEEP-DIVE MODAL & IMAGE STATUS RENDERING ─── */
+function openStageDeepDive(tag) {
+  const info = STAGE_KNOWLEDGE[tag] || STAGE_KNOWLEDGE['conv'];
+  document.getElementById('stageModal').style.display = 'flex';
+
+  document.getElementById('smIcon').textContent = info.icon;
+  document.getElementById('smName').textContent = `${info.num}. ${info.name}`;
+  document.getElementById('smBadge').textContent = info.role;
+  document.getElementById('smBadge').style.background = info.color;
+  document.getElementById('smSummary').textContent = info.summary;
+
+  document.getElementById('isDescIn').textContent = info.descIn;
+  document.getElementById('isDescOp').textContent = info.descOp;
+  document.getElementById('isDescOut').textContent = info.descOut;
+
+  // Render Image Status Canvases
+  renderImageStatusPreview(tag);
+
+  // Set explainer text
+  updateExplainerView(info);
+}
+
+function openCurrentStageDeepDive() {
+  const tag = currentSelectedLayer?.tag || 'conv';
+  openStageDeepDive(tag);
+}
+
+function closeStageModal() {
+  document.getElementById('stageModal').style.display = 'none';
+}
+
+function setExplainerMode(mode) {
+  currentExplainerMode = mode;
+  document.getElementById('btnBeg').classList.toggle('active', mode === 'beginner');
+  document.getElementById('btnExp').classList.toggle('active', mode === 'expert');
+  document.getElementById('navBtnBeg').classList.toggle('active', mode === 'beginner');
+  document.getElementById('navBtnExp').classList.toggle('active', mode === 'expert');
+
+  const tag = activeStageFilter !== 'all' ? activeStageFilter : (currentSelectedLayer?.tag || 'conv');
+  const info = STAGE_KNOWLEDGE[tag] || STAGE_KNOWLEDGE['conv'];
+  updateExplainerView(info);
+}
+
+function setGlobalExplainerMode(mode) {
+  setExplainerMode(mode);
+}
+
+function updateExplainerView(info) {
+  const isExp = currentExplainerMode === 'expert';
+  document.getElementById('smExpHd').textContent = isExp ? 'Mathematical Mechanics & Tensor Operations' : 'How it Works (Simple Analogy)';
+  document.getElementById('smExpBody').innerHTML = isExp ? info.expert : info.beginner;
+  document.getElementById('smMathBox').style.display = isExp ? 'block' : 'none';
+  document.getElementById('smMathBox').textContent = info.math || '';
+}
+
+/* ─── RENDER LIVE IMAGE STATUS CANVASES IN DEEP-DIVE ─── */
+function renderImageStatusPreview(tag) {
+  const cIn = document.getElementById('isCanvasIn');
+  const cOp = document.getElementById('isCanvasOp');
+  const cOut = document.getElementById('isCanvasOut');
+
+  const ctxIn = cIn.getContext('2d');
+  const ctxOp = cOp.getContext('2d');
+  const ctxOut = cOut.getContext('2d');
+
+  [ctxIn, ctxOp, ctxOut].forEach(ctx => {
+    ctx.fillStyle = '#05070f';
+    ctx.fillRect(0, 0, 128, 128);
+  });
+
+  if (tag === 'input') {
+    drawSampleTruck(ctxIn, false, 128);
+    drawSampleTruck(ctxOp, true, 128);
+    drawSampleTruck(ctxOut, true, 128);
+    document.getElementById('isTransformTitle').textContent = '2. Labelled Ground Truths';
+  } else if (tag === 'conv') {
+    drawSampleTruck(ctxIn, false, 128);
+    drawKernelGrid(ctxOp, [-1, -1, -1, -1, 8, -1, -1, -1, -1]);
+    drawEdgeFilteredTruck(ctxOut, 128);
+    document.getElementById('isTransformTitle').textContent = '2. 3×3 Convolving Filter';
+  } else if (tag === 'bn') {
+    drawEdgeFilteredTruck(ctxIn, 128);
+    drawBellCurve(ctxOp);
+    drawNormalizedFeatures(ctxOut, 128);
+    document.getElementById('isTransformTitle').textContent = '2. Mean/Variance Scaling';
+  } else if (tag === 'silu') {
+    drawNormalizedFeatures(ctxIn, 128);
+    drawSiLUCurve(ctxOp);
+    drawRectifiedFeatures(ctxOut, 128);
+    document.getElementById('isTransformTitle').textContent = '2. SiLU Gating: x · σ(x)';
+  } else if (tag === 'c2f') {
+    drawRectifiedFeatures(ctxIn, 128);
+    drawBottleneckFlow(ctxOp);
+    drawPartLevelFeatures(ctxOut, 128);
+    document.getElementById('isTransformTitle').textContent = '2. Residual Shortcuts & Split';
+  } else if (tag === 'sppf') {
+    drawPartLevelFeatures(ctxIn, 128);
+    drawMultiScalePoolGrid(ctxOp);
+    drawMultiScaleContextHeatmap(ctxOut, 128);
+    document.getElementById('isTransformTitle').textContent = '2. 5×5, 9×9, 13×13 Max Pools';
+  } else if (tag === 'upsample') {
+    drawMultiScaleContextHeatmap(ctxIn, 128);
+    drawUpsampleGridLines(ctxOp);
+    drawUpsampledGridFeatures(ctxOut, 128);
+    document.getElementById('isTransformTitle').textContent = '2. 2× Spatial Interpolation';
+  } else if (tag === 'concat') {
+    drawEdgeFilteredTruck(ctxIn, 128);
+    drawConcatMerger(ctxOp);
+    drawFusedDualChannelFeatures(ctxOut, 128);
+    document.getElementById('isTransformTitle').textContent = '2. Channel-wise Concatenation';
+  } else if (tag === 'detect') {
+    drawFusedDualChannelFeatures(ctxIn, 128);
+    drawAnchorGrid(ctxOp);
+    drawFinalDetections(ctxOut, 128);
+    document.getElementById('isTransformTitle').textContent = '2. DFL & Class Branches';
+  } else {
+    drawEdgeFilteredTruck(ctxIn, 128);
+    drawKernelGrid(ctxOp, [1, 0, -1, 1, 0, -1, 1, 0, -1]);
+    drawFinalDetections(ctxOut, 128);
+    document.getElementById('isTransformTitle').textContent = '2. Transformation Kernel';
+  }
+}
+
+/* ─── CANVAS DRAWING PRIMITIVES FOR IMAGE STATUS ─── */
+function drawSampleTruck(ctx, withBoxes, size = 128) {
+  const s = size / 128;
+  ctx.fillStyle = '#1e293b'; ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = '#334155'; ctx.fillRect(0, 0, size, 65 * s);
+  ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 65 * s, size, 63 * s);
+
+  ctx.fillStyle = '#020617';
+  ctx.fillRect(40 * s, 50 * s, 48 * s, 30 * s);
+  ctx.fillRect(48 * s, 38 * s, 32 * s, 16 * s);
+
+  if (withBoxes) {
+    ctx.lineWidth = 2 * s; ctx.strokeStyle = '#ef4444'; ctx.strokeRect(36 * s, 34 * s, 56 * s, 50 * s);
+    ctx.strokeStyle = '#3b82f6'; ctx.strokeRect(8 * s, 48 * s, 30 * s, 26 * s);
+    ctx.strokeStyle = '#22c55e'; ctx.strokeRect(26 * s, 88 * s, 30 * s, 30 * s);
+  }
+}
+
+function drawKernelGrid(ctx, weights) {
+  const size = 30, startX = 19, startY = 19;
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      const w = weights[r * 3 + c];
+      ctx.fillStyle = w > 0 ? `rgba(59,130,246,${Math.min(1, Math.abs(w)*0.25)})` : (w < 0 ? `rgba(244,63,94,${Math.min(1, Math.abs(w)*0.25)})` : '#1e293b');
+      ctx.fillRect(startX + c * size, startY + r * size, size - 2, size - 2);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(w, startX + c * size + size*0.5 - 1, startY + r * size + size*0.5 - 1);
+    }
+  }
+}
+
+function drawEdgeFilteredTruck(ctx, size = 128) {
+  const s = size / 128;
+  ctx.fillStyle = '#030712'; ctx.fillRect(0, 0, size, size);
+  ctx.strokeStyle = '#60a5fa'; ctx.lineWidth = 2 * s;
+  ctx.strokeRect(40 * s, 50 * s, 48 * s, 30 * s);
+  ctx.strokeRect(48 * s, 38 * s, 32 * s, 16 * s);
+  ctx.beginPath(); ctx.arc(52 * s, 80 * s, 6 * s, 0, Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(76 * s, 80 * s, 6 * s, 0, Math.PI*2); ctx.stroke();
+}
+
+function drawBellCurve(ctx) {
+  ctx.fillStyle = '#030712'; ctx.fillRect(0, 0, 128, 128);
+  ctx.strokeStyle = '#10b981'; ctx.lineWidth = 2.5; ctx.beginPath();
+  for (let x = 10; x <= 118; x++) {
+    const norm = (x - 64) / 18;
+    const y = 110 - Math.exp(-0.5 * norm * norm) * 85;
+    if (x === 10) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.fillStyle = '#64748b'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('μ = 0.0, σ = 1.0', 64, 120);
+}
+
+function drawNormalizedFeatures(ctx, size = 128) {
+  drawEdgeFilteredTruck(ctx, size);
+  const imgData = ctx.getImageData(0, 0, size, size);
+  for (let i = 0; i < imgData.data.length; i += 4) {
+    if (imgData.data[i] > 80) {
+      imgData.data[i] = 16; imgData.data[i+1] = 185; imgData.data[i+2] = 129; // emerald green
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
+function drawSiLUCurve(ctx) {
+  ctx.fillStyle = '#030712'; ctx.fillRect(0, 0, 128, 128);
+  ctx.strokeStyle = '#8b5cf6'; ctx.lineWidth = 2.5; ctx.beginPath();
+  for (let x = 10; x <= 118; x++) {
+    const rx = (x - 64) / 12;
+    const silu = rx / (1 + Math.exp(-rx));
+    const y = 80 - silu * 15;
+    if (x === 10) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.fillStyle = '#64748b'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('f(x) = x · σ(x)', 64, 120);
+}
+
+function drawRectifiedFeatures(ctx, size = 128) {
+  const s = size / 128;
+  ctx.fillStyle = '#030712'; ctx.fillRect(0, 0, size, size);
+  ctx.strokeStyle = '#a855f7'; ctx.lineWidth = 3 * s;
+  ctx.strokeRect(40 * s, 50 * s, 48 * s, 30 * s);
+  ctx.strokeRect(48 * s, 38 * s, 32 * s, 16 * s);
+}
+
+function drawBottleneckFlow(ctx) {
+  ctx.fillStyle = '#030712'; ctx.fillRect(0, 0, 128, 128);
+  ctx.strokeStyle = '#ec4899'; ctx.lineWidth = 2;
+  ctx.strokeRect(15, 48, 26, 32);
+  ctx.strokeRect(87, 48, 26, 32);
+  ctx.beginPath(); ctx.moveTo(41, 64); ctx.lineTo(87, 64); ctx.stroke();
+  ctx.beginPath(); ctx.arc(64, 40, 16, Math.PI, 0); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('Split & Shortcut', 64, 98);
+}
+
+function drawPartLevelFeatures(ctx, size = 128) {
+  const s = size / 128;
+  ctx.fillStyle = '#030712'; ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = '#ec4899';
+  ctx.fillRect(40 * s, 50 * s, 48 * s, 10 * s);
+  ctx.fillRect(48 * s, 38 * s, 32 * s, 12 * s);
+  ctx.beginPath(); ctx.arc(52 * s, 75 * s, 8 * s, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(76 * s, 75 * s, 8 * s, 0, Math.PI*2); ctx.fill();
+}
+
+function drawMultiScalePoolGrid(ctx) {
+  ctx.fillStyle = '#030712'; ctx.fillRect(0, 0, 128, 128);
+  ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.5;
+  ctx.strokeRect(14, 14, 100, 100);
+  ctx.strokeStyle = '#38bdf8'; ctx.strokeRect(28, 28, 72, 72);
+  ctx.strokeStyle = '#ec4899'; ctx.strokeRect(44, 44, 40, 40);
+  ctx.fillStyle = '#fff'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('5×5', 64, 52); ctx.fillText('9×9', 64, 38); ctx.fillText('13×13', 64, 22);
+}
+
+function drawMultiScaleContextHeatmap(ctx, size = 128) {
+  const s = size / 128;
+  ctx.fillStyle = '#030712'; ctx.fillRect(0, 0, size, size);
+  const grad = ctx.createRadialGradient(64 * s, 64 * s, 4 * s, 64 * s, 64 * s, 50 * s);
+  grad.addColorStop(0, '#f59e0b'); grad.addColorStop(0.6, '#ec4899'); grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad; ctx.fillRect(8 * s, 8 * s, 112 * s, 112 * s);
+}
+
+function drawUpsampleGridLines(ctx) {
+  ctx.fillStyle = '#030712'; ctx.fillRect(0, 0, 128, 128);
+  ctx.strokeStyle = '#a855f7'; ctx.lineWidth = 1.5;
+  ctx.strokeRect(44, 44, 40, 40);
+  ctx.setLineDash([4, 4]); ctx.strokeRect(20, 20, 88, 88); ctx.setLineDash([]);
+  ctx.fillStyle = '#fff'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('20×20 → 40×40 (2×)', 64, 118);
+}
+
+function drawUpsampledGridFeatures(ctx, size = 128) {
+  const s = size / 128;
+  ctx.fillStyle = '#030712'; ctx.fillRect(0, 0, size, size);
+  for (let y = 20 * s; y < 100 * s; y += 12 * s) {
+    for (let x = 20 * s; x < 100 * s; x += 12 * s) {
+      ctx.fillStyle = '#a855f7';
+      ctx.fillRect(x, y, 10 * s, 10 * s);
+    }
+  }
+}
+
+function drawConcatMerger(ctx) {
+  ctx.fillStyle = '#030712'; ctx.fillRect(0, 0, 128, 128);
+  ctx.fillStyle = '#3b82f6'; ctx.fillRect(20, 30, 40, 68);
+  ctx.fillStyle = '#a855f7'; ctx.fillRect(68, 30, 40, 68);
+  ctx.fillStyle = '#fff'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('C1', 40, 68); ctx.fillText('C2', 88, 68);
+  ctx.fillText('Concat [C1 + C2]', 64, 116);
+}
+
+function drawFusedDualChannelFeatures(ctx, size = 128) {
+  const s = size / 128;
+  drawEdgeFilteredTruck(ctx, size);
+  const grad = ctx.createRadialGradient(64 * s, 64 * s, 4 * s, 64 * s, 64 * s, 45 * s);
+  grad.addColorStop(0, 'rgba(6,182,212,0.6)'); grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad; ctx.fillRect(10 * s, 10 * s, 108 * s, 108 * s);
+}
+
+function drawAnchorGrid(ctx) {
+  ctx.fillStyle = '#030712'; ctx.fillRect(0, 0, 128, 128);
+  ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
+  for (let i = 16; i < 128; i += 16) {
+    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 128); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(128, i); ctx.stroke();
+  }
+  ctx.strokeStyle = '#e11d48'; ctx.lineWidth = 2; ctx.strokeRect(40, 40, 48, 48);
+}
+
+function drawFinalDetections(ctx, size = 128) {
+  const s = size / 128;
+  drawSampleTruck(ctx, false, size);
+  ctx.lineWidth = 2.5 * s; ctx.strokeStyle = '#22c55e';
+  ctx.strokeRect(36 * s, 34 * s, 56 * s, 50 * s);
+  ctx.fillStyle = '#22c55e'; ctx.font = `bold ${Math.round(10 * s)}px sans-serif`;
+  ctx.fillText('truck 96%', 38 * s, 30 * s);
+}
+
+/* ─── INTERACTION: HOVER & CLICK ─── */
+function onMouseMove(e) {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  const allClickables = layerGroups.flatMap(lg => [...lg.tiles, ...(lg.imagePlane ? [lg.imagePlane] : [])]);
+  const intersects = raycaster.intersectObjects(allClickables);
+  const tip = document.getElementById('tip');
+
+  if (intersects.length > 0) {
+    const hit = intersects[0].object;
+    const u = hit.userData;
+
+    if (u.isImageStage) {
+      document.getElementById('tipName').textContent = `${u.layerName} [Image Status]`;
+      document.getElementById('tipType').textContent = `${u.type} Image Plane`;
+      document.getElementById('tipCh').textContent = `Full ${u.shape[1]}ch view`;
+    } else {
+      document.getElementById('tipName').textContent = `#${u.layerIdx} ${u.layerName} [Ch ${u.tileIdx}]`;
+      document.getElementById('tipType').textContent = u.type || 'Conv';
+      document.getElementById('tipCh').textContent = `${u.tileIdx + 1} of ${u.shape[1]}`;
+    }
+
+    document.getElementById('tipSp').textContent = `${u.shape[2]} × ${u.shape[3]} px`;
+    const gn = gradNorms[u.layerIdx];
+    document.getElementById('tipGn').textContent = gn != null ? (gn * 100).toFixed(1) + '%' : '–';
+    document.getElementById('tipP').textContent = (u.params || 0).toLocaleString();
+
+    tip.style.display = 'block';
+    tip.style.left = Math.min(e.clientX + 16, window.innerWidth - 200) + 'px';
+    tip.style.top = Math.min(e.clientY - 12, window.innerHeight - 180) + 'px';
+  } else {
+    tip.style.display = 'none';
+  }
+}
+
+function onSceneClick(e) {
+  if (e.target.tagName === 'BUTTON' || e.target.closest('.stage-modal') || e.target.closest('.nav') || e.target.closest('.arch-ribbon') || e.target.closest('.image-tray')) return;
+  raycaster.setFromCamera(mouse, camera);
+  const allClickables = layerGroups.flatMap(lg => [...lg.tiles, ...(lg.imagePlane ? [lg.imagePlane] : [])]);
+  const intersects = raycaster.intersectObjects(allClickables);
+  if (intersects.length > 0) {
+    const u = intersects[0].object.userData;
+    currentSelectedLayer = u.stageObj;
+    updateInspectorWithLayer(u.stageObj);
+    openStageDeepDive(u.tag);
+  }
+}
+
+function updateInspectorWithLayer(stage) {
+  const gn = gradNorms[stage.index];
+  document.getElementById('inspName').textContent = `#${stage.index} ${stage.name}`;
+  document.getElementById('inspType').textContent = stage.type;
+  document.getElementById('inspShape').textContent = (stage.shape || []).join(' × ');
+  document.getElementById('inspCh').textContent = stage.shape[1] + ' channels';
+  document.getElementById('inspRes').textContent = `${stage.shape[2]}×${stage.shape[3]} px`;
+  document.getElementById('inspParams').textContent = (stage.params || 0).toLocaleString();
+  document.getElementById('inspGrad').textContent = gn != null ? (gn * 100).toFixed(2) + '%' : '–';
+  document.getElementById('inspDesc').textContent = stage.desc || 'Feature transformation layer.';
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+/* ─── CONTROLS & HELPERS ─── */
+function toggleRot() {
+  autoRotate = !autoRotate;
+  const btn = document.getElementById('rotBtn');
+  btn.classList.toggle('on', autoRotate);
+  btn.textContent = autoRotate ? '⟳ Rotate' : '❙❙ Paused';
+}
+
+function resetCam() {
+  if (controls) {
+    camera.position.set(-680, 160, 1150);
+    controls.target.set(-250, 0, 0);
+  }
+}
+
+function toggleConnections() {
+  showLinks = !showLinks;
+  connectionMeshes.forEach(cm => { cm.visible = showLinks; });
+  const b = document.getElementById('btnLinks');
+  b.textContent = showLinks ? '🕸 Hide Links' : '🕸 Show Links';
+  b.classList.toggle('on', showLinks);
+}
+
+function getTypeColor(type) {
+  const t = (type || '').toLowerCase();
+  if (t.includes('c2f') || t.includes('csp')) return 0xec4899; // pink
+  if (t.includes('sppf') || t.includes('pool')) return 0xf59e0b; // amber
+  if (t.includes('upsample')) return 0xa855f7; // purple
+  if (t.includes('concat')) return 0x06b6d4; // cyan
+  if (t.includes('detect') || t.includes('head')) return 0xe11d48; // crimson
+  if (t === 'bn' || t.includes('norm')) return 0x10b981; // emerald
+  if (t === 'silu' || t.includes('act')) return 0x8b5cf6; // violet
+  if (t === 'input') return 0x38bdf8; // cyan
+  return 0x3b82f6; // blue conv default
+}
+
+function createTextSprite(line1, line2) {
+  const cv = document.createElement('canvas');
+  cv.width = 512; cv.height = 70;
+  const ctx = cv.getContext('2d');
+  ctx.font = 'bold 22px monospace';
+  ctx.fillStyle = '#60a5fa'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(line1, 256, 22);
+  ctx.font = '14px monospace';
+  ctx.fillStyle = '#64748b';
+  ctx.fillText(line2, 256, 48);
+  const tex = new THREE.CanvasTexture(cv);
+  return new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.85 }));
+}
+
+function setPhase(idx, cls) {
+  if (_phase === idx) return;
+  _phase = idx;
+  document.querySelectorAll('.ph').forEach(el => { el.className = 'ph'; });
+  const p = document.getElementById('ph' + idx);
+  if (p) p.classList.add(cls);
+}
+
+function setBadge(text, cls) {
+  const b = document.getElementById('wsBadge');
+  b.textContent = text;
+  b.className = 'wsbadge ' + cls;
+}
+
+/* ─── WEBSOCKET & LIVE STREAMING ─── */
+function applyPipelineUpdates(pipeline) {
+  if (!pipeline || !pipeline.length) return;
+  setPhase(1, 'af');
+
+  pipeline.forEach((stage, i) => {
+    const lg = layerGroups[i];
+    if (!lg) return;
+
+    (stage.thumbs || []).forEach((b64, tIdx) => {
+      if (!b64 || !lg.tiles[tIdx]) return;
+      const key = b64.slice(0, 64);
+      if (!texCache[key]) {
+        const tex = new THREE.Texture();
+        const img = new Image();
+        img.onload = () => { tex.image = img; tex.needsUpdate = true; };
+        img.src = 'data:image/jpeg;base64,' + b64;
+        texCache[key] = tex;
+      }
+      lg.tiles[tIdx].material.map = texCache[key];
+      lg.tiles[tIdx].material.needsUpdate = true;
+    });
+  });
+}
+
+function applyCoreStagesUpdates(coreStages) {
+  if (!coreStages) return;
+  Object.entries(coreStages).forEach(([tag, stage]) => {
+    // Update In-Network Image Stage Plane texture in 3D
+    const b64 = stage.thumbs && stage.thumbs.length > 0 ? stage.thumbs[0] : (stage.image_base64 || null);
+    updateInNetworkStageImage(tag, b64);
+
+    // Update bottom tray status
+    const statusLbl = document.getElementById(`trayStatus_${tag}`);
+    if (stage.shape && statusLbl) {
+      statusLbl.textContent = `${stage.shape.slice(1).join('×')}`;
+    }
+  });
+}
+
+function applyGradNorms(gn) {
+  if (!gn) return;
+  const vals = Object.values(gn).map(Number);
+  const mx = Math.max(...vals, 1e-9);
+  gradNorms = {};
+  Object.entries(gn).forEach(([k, v]) => { gradNorms[parseInt(k)] = v / mx; });
+
+  setPhase(3, 'ab');
+  setTimeout(() => setPhase(4, 'au'), 600);
+
+  const barsContainer = document.getElementById('gbars');
+  barsContainer.innerHTML = '';
+  Object.keys(gn).sort((a, b) => a - b).forEach(k => {
+    const val = (gn[k] || 0) / mx;
+    const h = Math.max(3, Math.round(val * 100));
+    const bar = document.createElement('div');
+    bar.className = 'gbar-item';
+    bar.style.height = h + '%';
+    bar.style.background = val > 0.5 ? '#f43f5e' : (val > 0.25 ? '#fbbf24' : '#3b82f6');
+    bar.title = `L${k}: ${(gn[k] || 0).toFixed(4)}`;
+    barsContainer.appendChild(bar);
+  });
+}
+
+function applyMetrics(m) {
+  if (!m) return;
+  if (m.epoch != null) {
+    document.getElementById('mEp').textContent = `${m.epoch} / ${totalEpochs}`;
+    const pct = Math.min(100, Math.round(m.epoch * 100 / (totalEpochs || 1)));
+    document.getElementById('pf').style.width = pct + '%';
+    document.getElementById('ptxt').textContent = `${pct}% completed`;
+  }
+  if (m.batch != null) document.getElementById('mBat').textContent = m.batch;
+  if (m.box_loss != null) document.getElementById('mBox').textContent = Number(m.box_loss).toFixed(4);
+  if (m.cls_loss != null) document.getElementById('mCls').textContent = Number(m.cls_loss).toFixed(4);
+  if (m.map50 != null && m.map50 > 0) document.getElementById('mMap').textContent = Number(m.map50).toFixed(3);
+  if (m.lr != null) document.getElementById('mLR').textContent = Number(m.lr).toExponential(2);
+}
+
+function connect(pythonJobId, epochs) {
+  if (ws) { try { ws.close(); } catch {} ws = null; }
+  if (!pythonJobId) return;
+
+  totalEpochs = epochs || 100;
+  setBadge('CONNECTING', 'b-idle');
+  setPhase(0, 'af');
+
+  ws = new WebSocket(`${PY_WS}/ws/training/${pythonJobId}`);
+  ws.onopen = () => {
+    setBadge('● LIVE STREAM', 'b-live');
+    document.getElementById('bPhase').textContent = 'Live Training';
+  };
+  ws.onclose = () => setBadge('OFFLINE', 'b-idle');
+  ws.onerror = () => setBadge('DISCONNECTED', 'b-err');
+
+  ws.onmessage = ev => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+
+    if (msg.metrics) applyMetrics(msg.metrics);
+    if (msg.pipeline && msg.pipeline.length) applyPipelineUpdates(msg.pipeline);
+    if (msg.core_stages) applyCoreStagesUpdates(msg.core_stages);
+    if (msg.grad_norms && Object.keys(msg.grad_norms).length) applyGradNorms(msg.grad_norms);
+    if (msg.frame) updateInputImage(msg.frame.image_base64, msg.frame.width, msg.frame.height, msg.frame.gt, msg.frame.pred);
+    if (msg.status === 'completed') setBadge('COMPLETED', 'b-idle');
+    if (msg.status === 'failed') setBadge('FAILED', 'b-err');
+  };
+}
+
+/* ─── JOB SELECTOR & INITIALIZATION ─── */
+async function loadJobs() {
+  const sels = [document.getElementById('jsel'), document.getElementById('ovSel')];
+  try {
+    const res = await fetch('/api/training/jobs');
+    const jobs = await res.json();
+    sels.forEach(sel => {
+      if (!sel) return;
+      sel.innerHTML = '<option value="">— Select Training Run —</option>';
+      if (!jobs.length) {
+        sel.innerHTML = '<option value="">No training jobs available</option>';
+        return;
+      }
+      const running = jobs.filter(j => j.status === 'Running');
+      const other = jobs.filter(j => j.status !== 'Running');
+      [...running, ...other].forEach(j => {
+        const opt = document.createElement('option');
+        opt.value = j.pythonJobId || '';
+        opt.dataset.epochs = j.totalEpochs || 100;
+        opt.textContent = `${j.status === 'Running' ? '🟢' : '⚪'} ${j.name || 'Job ' + j.id} [${j.baseModel || 'YOLO'}] - Ep ${j.currentEpoch}/${j.totalEpochs}`;
+        if (j.status === 'Running') opt.style.color = '#34d399';
+        sel.appendChild(opt);
+      });
+      const autoPick = jobs.find(j => j.status === 'Running' && j.pythonJobId);
+      if (autoPick) sels.forEach(s => { if (s) s.value = autoPick.pythonJobId || ''; });
+    });
+  } catch {}
+}
+
+function switchJob() {
+  const sel = document.getElementById('jsel');
+  if (!sel.value) return;
+  const ep = parseInt(sel.options[sel.selectedIndex]?.dataset?.epochs) || 100;
+  document.getElementById('ov').style.display = 'none';
+  connect(sel.value, ep);
+}
+
+function startFromOverlay() {
+  const sel = document.getElementById('ovSel');
+  document.getElementById('ov').style.display = 'none';
+  if (sel.value) {
+    const ep = parseInt(sel.options[sel.selectedIndex]?.dataset?.epochs) || 100;
+    document.getElementById('jsel').value = sel.value;
+    connect(sel.value, ep);
+  }
+}
+
+/* ─── AUTO BOOT ─── */
+(async function boot() {
+  initThree();
+  await loadJobs();
+
+  const jobParam = new URLSearchParams(window.location.search).get('job');
+  if (jobParam) {
+    document.getElementById('ov').style.display = 'none';
+    try {
+      const res = await fetch('/api/training/jobs');
+      const jobs = await res.json();
+      const found = jobs.find(j => j.pythonJobId === jobParam);
+      document.getElementById('jsel').value = jobParam;
+      connect(jobParam, found?.totalEpochs || 100);
+    } catch {
+      connect(jobParam, 100);
+    }
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,187 @@
+@{
+    ViewData["Title"] = "Visualization Hub";
+}
+
+<style>
+    .viz-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; }
+    .viz-card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 25px; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; }
+    .viz-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); border-color: var(--color-primary-start); }
+    .viz-icon { width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; font-size: 1.5rem; }
+    .viz-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; color: var(--text-primary); }
+    .viz-desc { font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 15px; }
+    .viz-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
+    .badge-new { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+    .badge-real { background: rgba(124, 58, 237, 0.2); color: #7c3aed; }
+    .badge-interactive { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+    .badge-live { background: rgba(239, 68, 68, 0.2); color: #ef4444; animation: pulse 2s infinite; }
+    @@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    
+    .section-header { margin-bottom: 25px; }
+    .section-header h3 { margin: 0 0 5px 0; color: var(--text-primary); }
+    .section-header p { margin: 0; color: var(--text-muted); font-size: 0.9rem; }
+</style>
+
+<div class="page-header">
+    <h1 class="page-title">Visualization Hub</h1>
+    <p class="page-subtitle">Explore YOLO models with real-time, interactive visualization tools</p>
+</div>
+
+<!-- Featured 3D Neural Studio Hero Card -->
+<div class="viz-card" style="margin-bottom: 28px; background: linear-gradient(135deg, rgba(37,99,235,0.15), rgba(124,58,237,0.15)); border: 1.5px solid rgba(59,130,246,0.5);" onclick="location.href='@Url.Action("CNNViz3D", "Visualization")'">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:15px;">
+        <div style="display:flex;align-items:center;gap:18px;">
+            <div class="viz-icon" style="background: linear-gradient(135deg, #2563eb, #7c3aed); color: #fff; width: 56px; height: 56px; margin-bottom: 0; font-size: 1.8rem;">
+                🧠
+            </div>
+            <div>
+                <h3 style="margin: 0 0 4px 0; color: #fff; font-size: 1.25rem;">3D Neural Network &amp; Image Flow Visualizer</h3>
+                <p style="margin: 0; color: #94a3b8; font-size: 0.86rem;">
+                    Watch the 9 core YOLO stages (Input, Conv, BN, SiLU, C2f, SPPF, Upsample, Concat, Detect) transform images in real time with dual Beginner &amp; AI Expert modes.
+                </p>
+            </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <span class="viz-badge badge-live">● Live 3D</span>
+            <span class="viz-badge badge-real">9 Core Layers</span>
+            <span class="viz-badge badge-new" style="background:#2563eb;color:#fff;padding:6px 14px;">Open 3D Studio →</span>
+        </div>
+    </div>
+</div>
+
+<div class="section-header">
+    <h3><i class="fas fa-eye mr-2"></i>Model Architecture</h3>
+    <p>Understand the structure and design of YOLO networks</p>
+</div>
+
+<div class="viz-grid" style="margin-bottom: 30px;">
+    <div class="viz-card" onclick="location.href='@Url.Action("Architecture", "Visualization")'">
+        <div class="viz-icon" style="background: rgba(124, 58, 237, 0.2); color: #7c3aed;">
+            <i data-feather="git-branch"></i>
+        </div>
+        <h4 class="viz-title">Architecture Explorer</h4>
+        <p class="viz-desc">Interactive tree visualization of YOLO network layers with real tensor shapes, parameters, and FLOPs.</p>
+        <span class="viz-badge badge-real">100% Real</span>
+    </div>
+
+    <div class="viz-card" onclick="location.href='@Url.Action("Network3D", "Visualization")'">
+        <div class="viz-icon" style="background: rgba(59, 130, 246, 0.2); color: #3b82f6;">
+            <i data-feather="box"></i>
+        </div>
+        <h4 class="viz-title">3D Network Topology</h4>
+        <p class="viz-desc">Force-directed 3D graph visualization with interactive controls for exploring network connectivity.</p>
+        <span class="viz-badge badge-new">New</span>
+        <span class="viz-badge badge-interactive">Interactive</span>
+    </div>
+
+    <div class="viz-card" onclick="location.href='@Url.Action("NetworkMonitor3D", "Visualization")'">
+        <div class="viz-icon" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">
+            <i data-feather="layers"></i>
+        </div>
+        <h4 class="viz-title">3D Network Monitor</h4>
+        <p class="viz-desc">Complete internal network visualization - layers, weights, connections, heads, and everything inside.</p>
+        <span class="viz-badge badge-new">New</span>
+        <span class="viz-badge badge-real">100% Real</span>
+        <span class="viz-badge badge-interactive">Drill-down</span>
+    </div>
+</div>
+
+<div class="section-header">
+    <h3><i class="fas fa-brain mr-2"></i>Internal Representations</h3>
+    <p>See what the network learns and how it processes data</p>
+</div>
+
+<div class="viz-grid" style="margin-bottom: 30px;">
+    <div class="viz-card" onclick="location.href='@Url.Action("FeatureMaps", "Visualization")'">
+        <div class="viz-icon" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">
+            <i data-feather="grid"></i>
+        </div>
+        <h4 class="viz-title">Feature Map Explorer</h4>
+        <p class="viz-desc">Visualize activations at each layer with zoom, channel comparison, and interactive exploration.</p>
+        <span class="viz-badge badge-real">100% Real</span>
+        <span class="viz-badge badge-interactive">Interactive</span>
+    </div>
+
+    <div class="viz-card" onclick="location.href='@Url.Action("Weights", "Visualization")'">
+        <div class="viz-icon" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;">
+            <i data-feather="layers"></i>
+        </div>
+        <h4 class="viz-title">Weight & Filter Visualization</h4>
+        <p class="viz-desc">Inspect learned convolutional kernels and bias distributions layer by layer.</p>
+        <span class="viz-badge badge-new">New</span>
+        <span class="viz-badge badge-real">100% Real</span>
+    </div>
+</div>
+
+<div class="section-header">
+    <h3><i class="fas fa-search-plus mr-2"></i>Explainability (XAI)</h3>
+    <p>Understand why the model makes specific predictions</p>
+</div>
+
+<div class="viz-grid" style="margin-bottom: 30px;">
+    <div class="viz-card" onclick="location.href='@Url.Action("Explainability", "Visualization")'">
+        <div class="viz-icon" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">
+            <i data-feather="activity"></i>
+        </div>
+        <h4 class="viz-title">Grad-CAM & Attention Maps</h4>
+        <p class="viz-desc">Real gradient-weighted class activation mapping showing exactly what the model focuses on.</p>
+        <span class="viz-badge badge-new">New</span>
+        <span class="viz-badge badge-real">100% Real</span>
+    </div>
+</div>
+
+<div class="section-header">
+    <h3><i class="fas fa-chart-line mr-2"></i>Training Analytics</h3>
+    <p>Monitor network behavior during training in real-time</p>
+</div>
+
+<div class="viz-grid" style="margin-bottom: 30px;">
+    <div class="viz-card" onclick="location.href='@Url.Action("LiveTraining3D", "Visualization")'">
+        <div class="viz-icon" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">
+            <i data-feather="activity"></i>
+        </div>
+        <h4 class="viz-title">Live 3D Training Visualization</h4>
+        <p class="viz-desc">Watch the network train in real-time with 3D weight updates, activation flow, and gradient visualization.</p>
+        <span class="viz-badge badge-new">New</span>
+        <span class="viz-badge badge-real">100% Real</span>
+        <span class="viz-badge badge-interactive">Live</span>
+    </div>
+
+    <div class="viz-card" onclick="location.href='@Url.Action("LayerStats", "Visualization")'">
+        <div class="viz-icon" style="background: rgba(236, 72, 153, 0.2); color: #ec4899;">
+            <i data-feather="bar-chart-2"></i>
+        </div>
+        <h4 class="viz-title">Layer Statistics Dashboard</h4>
+        <p class="viz-desc">Real-time monitoring of activation statistics, sparsity, dead neurons, and gradient flow.</p>
+        <span class="viz-badge badge-new">New</span>
+        <span class="viz-badge badge-real">100% Real</span>
+    </div>
+
+    <div class="viz-card" onclick="location.href='@Url.Action("EpochComparison", "Visualization")'">
+        <div class="viz-icon" style="background: rgba(139, 92, 246, 0.2); color: #8b5cf6;">
+            <i data-feather="history"></i>
+        </div>
+        <h4 class="viz-title">Epoch Activation Comparison</h4>
+        <p class="viz-desc">Compare how network activations evolve across training epochs with difference heatmaps.</p>
+        <span class="viz-badge badge-new">New</span>
+        <span class="viz-badge badge-interactive">Interactive</span>
+    </div>
+</div>
+
+<div style="background: rgba(124, 58, 237, 0.1); border: 1px solid rgba(124, 58, 237, 0.3); border-radius: var(--radius-lg); padding: 20px; margin-top: 30px;">
+    <h4 style="color: var(--color-primary-end); margin-bottom: 10px;">
+        <i class="fas fa-info-circle mr-2"></i>About Real Visualization
+    </h4>
+    <p class="text-muted small" style="margin-bottom: 8px;">
+        All visualization tools marked as <span class="viz-badge badge-real">100% Real</span> use actual model data from the Python AI engine. 
+        This means you're seeing genuine activations, gradients, and weights - not simulated or mock data.
+    </p>
+    <p class="text-muted small">
+        Interactive tools allow you to explore, zoom, compare, and analyze the network's internal state in real-time.
+    </p>
+</div>
+
+@section Scripts {
+    <script>
+        feather.replace();
+    </script>
+}

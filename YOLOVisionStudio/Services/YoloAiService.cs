@@ -29,7 +29,13 @@ namespace YOLOVisionStudio.Services
         public async Task<TrainingMetricsResponse> GetTrainingMetrics(string jobId)
         {
             try {
-                return await _httpClient.GetFromJsonAsync<TrainingMetricsResponse>($"/training/{jobId}/metrics") ?? new TrainingMetricsResponse();
+                var response = await _httpClient.GetAsync($"/training/{jobId}/metrics");
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    return new TrainingMetricsResponse(); // empty — job not found in Python engine
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<TrainingMetricsResponse>() ?? new TrainingMetricsResponse();
+            } catch (HttpRequestException) {
+                throw; // let background worker handle connection failures
             } catch { return new TrainingMetricsResponse(); }
         }
 
@@ -138,6 +144,48 @@ namespace YOLOVisionStudio.Services
         {
             var res = await _httpClient.PostAsJsonAsync("/dataset/augment", request);
             return await res.Content.ReadFromJsonAsync<AugmentationPreviewResponse>() ?? new AugmentationPreviewResponse();
+        }
+
+        public async Task<GradCAMResponse> GenerateGradCAM(GradCAMRequest request)
+        {
+            try
+            {
+                var res = await _httpClient.PostAsJsonAsync("/visualization/gradcam", request);
+                res.EnsureSuccessStatusCode();
+                return await res.Content.ReadFromJsonAsync<GradCAMResponse>() ?? new GradCAMResponse();
+            }
+            catch (Exception ex)
+            {
+                return new GradCAMResponse { OriginalImageBase64 = "", HeatmapBase64 = "", OverlayBase64 = "" };
+            }
+        }
+
+        public async Task<AttentionMapResponse> GenerateAttentionMaps(AttentionMapRequest request)
+        {
+            try
+            {
+                var res = await _httpClient.PostAsJsonAsync("/visualization/attention-maps", request);
+                res.EnsureSuccessStatusCode();
+                return await res.Content.ReadFromJsonAsync<AttentionMapResponse>() ?? new AttentionMapResponse();
+            }
+            catch (Exception ex)
+            {
+                return new AttentionMapResponse { OriginalImageBase64 = "", AttentionMaps = new(), OverlayBase64 = "" };
+            }
+        }
+
+        public async Task<WeightVisualization> VisualizeWeights(string modelPath, int layerIndex)
+        {
+            try
+            {
+                var res = await _httpClient.GetAsync($"/visualization/weights/{Uri.EscapeDataString(modelPath)}?layer_index={layerIndex}");
+                res.EnsureSuccessStatusCode();
+                return await res.Content.ReadFromJsonAsync<WeightVisualization>() ?? new WeightVisualization();
+            }
+            catch (Exception ex)
+            {
+                return new WeightVisualization { LayerIndex = layerIndex, LayerName = "Error", WeightsBase64 = "" };
+            }
         }
 
         private class CachedModelsEnvelope

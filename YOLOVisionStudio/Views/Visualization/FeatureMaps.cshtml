@@ -30,9 +30,22 @@
 
     
 
-    .fm-thumb { aspect-ratio: 1; border-radius: 4px; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; box-shadow: 0 2px 5px rgba(0,0,0,0.4); overflow: hidden; }
-    .fm-thumb:hover { transform: scale(2); z-index: 10; box-shadow: 0 8px 24px rgba(0,0,0,0.8); }
+    .fm-thumb { aspect-ratio: 1; border-radius: 4px; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; box-shadow: 0 2px 5px rgba(0,0,0,0.4); overflow: hidden; position: relative; }
+    .fm-thumb:hover { transform: scale(1.5); z-index: 10; box-shadow: 0 8px 24px rgba(0,0,0,0.8); }
     .fm-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .fm-thumb.selected { border: 2px solid var(--color-primary-start); transform: scale(1.1); }
+
+    /* Modal for zoomed view */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; display: none; align-items: center; justify-content: center; }
+    .modal-content { max-width: 90vw; max-height: 90vh; display: flex; flex-direction: column; align-items: center; }
+    .modal-image { max-width: 100%; max-height: 80vh; object-fit: contain; }
+    .modal-close { position: absolute; top: 20px; right: 20px; color: white; font-size: 2rem; cursor: pointer; }
+    .modal-info { color: white; margin-top: 10px; text-align: center; }
+
+    /* Comparison mode */
+    .comparison-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+    .comparison-panel { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 20px; }
+    .comparison-image { width: 100%; border-radius: 8px; }
 
     /* Colormap CSS fallbacks */
     .cm-viridis { background: linear-gradient(45deg, #440154, #414487, #2a788e, #22a884, #7ad151, #fde725); }
@@ -199,6 +212,32 @@
 
         <!-- Real results from API or demo -->
         <div id="actualResults" style="display:none;"></div>
+
+        <!-- Comparison Mode -->
+        <div id="comparisonSection" style="display:none;" class="comparison-container">
+            <div class="comparison-panel">
+                <h5><i class="fas fa-image mr-2"></i>Channel A</h5>
+                <img id="compareImageA" class="comparison-image" alt="Channel A" />
+                <p id="compareInfoA" class="small text-muted mt-2"></p>
+            </div>
+            <div class="comparison-panel">
+                <h5><i class="fas fa-image mr-2"></i>Channel B</h5>
+                <img id="compareImageB" class="comparison-image" alt="Channel B" />
+                <p id="compareInfoB" class="small text-muted mt-2"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Zoom Modal -->
+    <div class="modal-overlay" id="zoomModal" onclick="closeZoomModal()">
+        <span class="modal-close">&times;</span>
+        <div class="modal-content">
+            <img id="zoomedImage" class="modal-image" alt="Zoomed" />
+            <div class="modal-info">
+                <h5 id="zoomTitle">Feature Map</h5>
+                <p id="zoomInfo"></p>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -206,6 +245,8 @@
 <script>
 let selectedImage = null;
 let modelFile = 'yolo11n.pt';
+let selectedChannels = []; // For comparison mode
+let allFeatureMaps = []; // Store all feature maps for comparison
 
 function updateModelFile() {
     const ver = document.getElementById('modelVersion').value;
@@ -281,13 +322,14 @@ function renderDemoResults(layers) {
                 <div style="display:flex;align-items:center;gap:8px;">
                     <span class="layer-shape-tag">[${shape.join(', ')}]</span>
                     <span style="font-size:0.75rem;color:var(--text-muted);">${channels} channels</span>
+                    <button class="btn btn-outline btn-sm" onclick="enableComparisonMode(${idx})" style="margin-left:auto;">Compare Channels</button>
                 </div>
             </div>`;
 
         let grid = '<div class="fm-grid">';
         for (let c = 0; c < showCount; c++) {
             const style = cmStyles[c % cmStyles.length];
-            grid += `<div class="fm-thumb" title="Channel ${c}" style="${style};"></div>`;
+            grid += `<div class="fm-thumb" title="Channel ${c}" style="${style};" onclick="openZoomModal(${idx}, ${c}, '${name}')"></div>`;
         }
         grid += '</div>';
 
@@ -298,6 +340,88 @@ function renderDemoResults(layers) {
         div.innerHTML = header + grid;
         container.appendChild(div);
     });
+}
+
+// Zoom modal functions
+function openZoomModal(layerIdx, channelIdx, layerName) {
+    const modal = document.getElementById('zoomModal');
+    const img = document.getElementById('zoomedImage');
+    const title = document.getElementById('zoomTitle');
+    const info = document.getElementById('zoomInfo');
+
+    // For demo mode, use CSS gradient
+    const style = cmStyles[channelIdx % cmStyles.length];
+    img.style = style;
+    img.alt = `Layer ${layerIdx} Channel ${channelIdx}`;
+    
+    title.textContent = `Layer ${layerIdx}: ${layerName}`;
+    info.textContent = `Channel ${channelIdx} - Click anywhere to close`;
+
+    modal.style.display = 'flex';
+}
+
+function closeZoomModal() {
+    document.getElementById('zoomModal').style.display = 'none';
+}
+
+// Comparison mode functions
+function enableComparisonMode(layerIdx) {
+    const section = document.getElementById('comparisonSection');
+    section.style.display = 'grid';
+    
+    // For demo, use gradients
+    const styleA = cmStyles[0];
+    const styleB = cmStyles[7];
+    
+    document.getElementById('compareImageA').style = styleA;
+    document.getElementById('compareImageB').style = styleB;
+    document.getElementById('compareInfoA').textContent = 'Channel 0 - Edge detectors';
+    document.getElementById('compareInfoB').textContent = 'Channel 7 - Texture patterns';
+    
+    // Scroll to comparison section
+    section.scrollIntoView({ behavior: 'smooth' });
+}
+
+// Real zoom modal for actual feature maps
+function openRealZoomModal(fmIdx, channelIdx) {
+    const modal = document.getElementById('zoomModal');
+    const img = document.getElementById('zoomedImage');
+    const title = document.getElementById('zoomTitle');
+    const info = document.getElementById('zoomInfo');
+
+    const fm = allFeatureMaps[fmIdx];
+    const b64 = fm.channels_base64[channelIdx];
+    
+    img.src = 'data:image/jpeg;base64,' + b64;
+    img.style = ''; // Remove CSS gradient style
+    
+    title.textContent = `Layer ${fm.layer_index}: ${fm.layer_name}`;
+    info.textContent = `Channel ${channelIdx} - Shape: [${fm.shape.join(', ')}] - Click anywhere to close`;
+
+    modal.style.display = 'flex';
+}
+
+// Real comparison mode for actual feature maps
+function enableRealComparisonMode(fmIdx) {
+    const section = document.getElementById('comparisonSection');
+    section.style.display = 'grid';
+    
+    const fm = allFeatureMaps[fmIdx];
+    
+    // Compare first and last channels
+    const b64A = fm.channels_base64[0];
+    const b64B = fm.channels_base64[fm.channels_base64.length - 1];
+    
+    document.getElementById('compareImageA').src = 'data:image/jpeg;base64,' + b64A;
+    document.getElementById('compareImageB').src = 'data:image/jpeg;base64,' + b64B;
+    document.getElementById('compareImageA').style = '';
+    document.getElementById('compareImageB').style = '';
+    
+    document.getElementById('compareInfoA').textContent = `Channel 0 - ${fm.layer_name}`;
+    document.getElementById('compareInfoB').textContent = `Channel ${fm.channels_base64.length - 1} - ${fm.layer_name}`;
+    
+    // Scroll to comparison section
+    section.scrollIntoView({ behavior: 'smooth' });
 }
 
 async function extractFeatureMaps() {
@@ -337,16 +461,21 @@ async function extractFeatureMaps() {
                 const container = document.getElementById('actualResults');
                 container.innerHTML = '';
                 if (data.feature_maps && data.feature_maps.length > 0) {
-                    data.feature_maps.forEach(fm => {
+                    allFeatureMaps = data.feature_maps; // Store for comparison
+                    data.feature_maps.forEach((fm, fmIdx) => {
                         const div = document.createElement('div');
                         div.className = 'layer-result';
                         div.innerHTML = `
                             <div class="layer-result-header">
                                 <h5 style="margin:0;font-size:0.9rem;">Layer ${fm.layer_index}: <span style="color:var(--text-primary);">${fm.layer_name}</span></h5>
-                                <span class="layer-shape-tag">[${fm.shape.join(', ')}]</span>
+                                <div style="display:flex;align-items:center;gap:8px;">
+                                    <span class="layer-shape-tag">[${fm.shape.join(', ')}]</span>
+                                    <span style="font-size:0.75rem;color:var(--text-muted);">${fm.shape[1]} channels</span>
+                                    <button class="btn btn-outline btn-sm" onclick="enableRealComparisonMode(${fmIdx})" style="margin-left:auto;">Compare Channels</button>
+                                </div>
                             </div>
                             <div class="fm-grid">
-                                ${fm.channels_base64.map((b64,i) => `<div class="fm-thumb" title="Channel ${i}"><img src="data:image/jpeg;base64,${b64}" alt="channel ${i}"></div>`).join('')}
+                                ${fm.channels_base64.map((b64,i) => `<div class="fm-thumb" title="Channel ${i}" onclick="openRealZoomModal(${fmIdx}, ${i})"><img src="data:image/jpeg;base64,${b64}" alt="channel ${i}"></div>`).join('')}
                             </div>`;
                         container.appendChild(div);
                     });

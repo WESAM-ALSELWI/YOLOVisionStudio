@@ -90,7 +90,7 @@ namespace YOLOVisionStudio.Models.ViewModels
         [Range(32, 1536, ErrorMessage = "Image size must be between 32 and 1536 px.")]
         public int ImageSize { get; set; } = 640;
         [Range(1, 128, ErrorMessage = "Batch size must be between 1 and 128.")]
-        public int BatchSize { get; set; } = 16;
+        public int BatchSize { get; set; } = 8;
 
         // Advanced hyperparameters
         public string Optimizer { get; set; } = "auto";

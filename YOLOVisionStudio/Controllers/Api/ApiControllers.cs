@@ -64,7 +64,89 @@ namespace YOLOVisionStudio.Controllers.Api
         public async Task<IActionResult> Start([FromBody] TrainingJob job) => Ok(await _trainingService.StartJobAsync(job));
 
         [HttpPost("{id}/stop")]
-        public IActionResult Stop(int id) => Ok(new { success = true });
+        public async Task<IActionResult> Stop(int id,
+            [FromServices] YOLOVisionStudio.Data.ApplicationDbContext db)
+        {
+            var job = await db.TrainingJobs.FindAsync(id);
+            if (job == null) return NotFound();
+            if (job.Status == JobStatus.Running)
+            {
+                job.Status = JobStatus.Cancelled;
+                job.ErrorMessage = "Manually stopped by user.";
+                job.CompletedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+            }
+            return Ok(new { success = true, status = job.Status.ToString() });
+        }
+
+        /// <summary>Return all training jobs so the 3D visualization pages can populate job selectors.</summary>
+        [HttpGet("jobs")]
+        public async Task<IActionResult> GetJobs()
+        {
+            var jobs = await _trainingService.GetAllJobsAsync();
+            var result = jobs.Select(j => new
+            {
+                id = j.Id,
+                name = j.Name,
+                status = j.Status.ToString(),
+                pythonJobId = j.PythonJobId,
+                currentEpoch = j.CurrentEpoch,
+                totalEpochs = j.Epochs,
+                baseModel = j.BaseModel,
+                yoloVersion = j.YoloVersion,
+                bestMap50 = j.BestmAP50
+            });
+            return Ok(result);
+        }
+
+        /// <summary>Return a single job's current status and metrics.</summary>
+        [HttpGet("{id}/status")]
+        public async Task<IActionResult> GetStatus(int id)
+        {
+            var job = await _trainingService.GetJobByIdAsync(id);
+            if (job == null) return NotFound();
+            return Ok(new
+            {
+                id = job.Id,
+                status = job.Status.ToString(),
+                pythonJobId = job.PythonJobId,
+                currentEpoch = job.CurrentEpoch,
+                totalEpochs = job.Epochs,
+                bestMap50 = job.BestmAP50,
+                bestMap5095 = job.BestmAP5095,
+                errorMessage = job.ErrorMessage
+            });
+        }
+
+        /// <summary>Mark all stuck Running jobs (Python engine lost them) as Failed immediately.</summary>
+        [HttpPost("reset-stale")]
+        public async Task<IActionResult> ResetStale([FromServices] YOLOVisionStudio.Data.ApplicationDbContext db,
+                                                     [FromServices] IYoloAiService ai)
+        {
+            var running = db.TrainingJobs
+                .Where(j => j.Status == JobStatus.Running)
+                .ToList();
+
+            int reset = 0;
+            foreach (var job in running)
+            {
+                if (string.IsNullOrEmpty(job.PythonJobId)) continue;
+                try
+                {
+                    var m = await ai.GetTrainingMetrics(job.PythonJobId);
+                    if (string.IsNullOrEmpty(m.Status))
+                    {
+                        job.Status = JobStatus.Failed;
+                        job.ErrorMessage = "Stale: AI engine restarted. Please start a new run.";
+                        reset++;
+                    }
+                }
+                catch { /* engine offline */ }
+            }
+            await db.SaveChangesAsync();
+            return Ok(new { reset, message = $"{reset} stale job(s) marked as Failed." });
+        }
+
     }
 
     [Route("api/models")]
